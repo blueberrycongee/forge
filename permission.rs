@@ -108,6 +108,22 @@ impl PermissionSession {
         }
     }
 
+    pub fn snapshot(&self) -> PermissionSnapshot {
+        let overrides = self.overrides.lock().unwrap();
+        PermissionSnapshot {
+            once: overrides.once.iter().cloned().collect(),
+            always: overrides.always.iter().cloned().collect(),
+            reject: overrides.reject.iter().cloned().collect(),
+        }
+    }
+
+    pub fn restore(&self, snapshot: PermissionSnapshot) {
+        let mut overrides = self.overrides.lock().unwrap();
+        overrides.once = snapshot.once.into_iter().collect();
+        overrides.always = snapshot.always.into_iter().collect();
+        overrides.reject = snapshot.reject.into_iter().collect();
+    }
+
     pub fn apply_reply(&self, permission: &str, reply: crate::langgraph::event::PermissionReply) {
         let mut overrides = self.overrides.lock().unwrap();
         overrides.apply_reply(permission, reply);
@@ -151,6 +167,14 @@ pub struct PermissionRequest {
     pub patterns: Vec<String>,
 }
 
+/// Serializable snapshot of runtime permission replies.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PermissionSnapshot {
+    pub once: Vec<String>,
+    pub always: Vec<String>,
+    pub reject: Vec<String>,
+}
+
 fn parse_permission_reply(value: &serde_json::Value) -> Option<PermissionReply> {
     match value {
         serde_json::Value::String(value) => parse_reply_str(value),
@@ -180,6 +204,7 @@ mod tests {
         PermissionRequest,
         PermissionRule,
         PermissionSession,
+        PermissionSnapshot,
     };
     use crate::langgraph::error::ResumeCommand;
     use crate::langgraph::event::PermissionReply;
@@ -272,5 +297,38 @@ mod tests {
         let json = serde_json::to_value(&request).expect("serialize");
         let decoded: PermissionRequest = serde_json::from_value(json).expect("deserialize");
         assert_eq!(request, decoded);
+    }
+
+    #[test]
+    fn permission_snapshot_roundtrip() {
+        let snapshot = PermissionSnapshot {
+            once: vec!["tool:echo".to_string()],
+            always: vec!["tool:read".to_string()],
+            reject: vec!["tool:rm".to_string()],
+        };
+        let json = serde_json::to_value(&snapshot).expect("serialize");
+        let decoded: PermissionSnapshot = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(snapshot, decoded);
+    }
+
+    #[test]
+    fn permission_session_snapshot_restore() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:echo", PermissionReply::Once);
+        session.apply_reply("tool:read", PermissionReply::Always);
+        session.apply_reply("tool:rm", PermissionReply::Reject);
+
+        let snapshot = session.snapshot();
+        let restored = PermissionSession::new(PermissionPolicy::new(vec![]));
+        restored.restore(snapshot);
+
+        assert_eq!(restored.decide("tool:echo"), PermissionDecision::Allow);
+        assert_eq!(restored.decide("tool:echo"), PermissionDecision::Allow);
+        assert_eq!(restored.decide("tool:read"), PermissionDecision::Allow);
+        assert_eq!(restored.decide("tool:rm"), PermissionDecision::Deny);
     }
 }

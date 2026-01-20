@@ -356,3 +356,23 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Add persistence hooks for permission sessions (store/resume by session id).
   - Introduce a ToolOutput schema registry for common tools (grep, read, ls).
+
+## 2026-01-21 03:21:47 Permission Session Snapshot (Phase 2)
+
+- Date: 2026-01-21 03:21:47
+- Scope: Phase 2 permission session persistence hooks
+- Summary: Added snapshot/restore for permission sessions to enable persistence and resume.
+- Changes:
+  - Added `PermissionSnapshot` (serde) capturing once/always/reject overrides.
+  - Added `PermissionSession::snapshot` and `PermissionSession::restore`.
+  - Added tests for snapshot roundtrip and restore behavior (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\permission.rs`
+- Known gaps / simplifications:
+  - Snapshot does not include base policy rules (only runtime overrides).
+  - No IO/storage adapter yet; persistence integration is left to caller.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce ToolOutput schema registry for common tools (grep, read, ls).
+  - Add persistence adapter trait (load/save by session id).
