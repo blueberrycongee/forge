@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use crate::langgraph::tool::{ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct TokenUsage {
     pub input: u64,
     pub output: u64,
@@ -18,7 +18,7 @@ pub struct TokenUsage {
 }
 
 /// Permission reply outcomes.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PermissionReply {
     Once,
     Always,
@@ -26,7 +26,7 @@ pub enum PermissionReply {
 }
 
 /// Runtime events emitted during execution.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Event {
     TextDelta {
         session_id: String,

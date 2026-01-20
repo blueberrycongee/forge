@@ -760,6 +760,27 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 7: event replay/audit log export wiring.
 
+## 2026-01-21 04:00:32 Phase 4 Round 7 (Audit Log Export)
+
+- Date: 2026-01-21 04:00:32
+- Scope: Phase 4 round 7 - audit log export from trace replay
+- Summary: Added trace replay JSON export and enabled serde for runtime events.
+- Changes:
+  - Added `TraceReplay::replay_to_json` for audit-log export.
+  - Added serde derives for Event/TokenUsage/PermissionReply/ToolState.
+  - Added unit test for replay JSON output (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\trace.rs`
+  - `D:\Desktop\opencode\forge\event.rs`
+  - `D:\Desktop\opencode\forge\tool.rs`
+- Known gaps / simplifications:
+  - Audit log uses minimal event mapping with synthetic session ids.
+  - No file IO helper for audit log yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 8: closeout / optional file IO for audit log.
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01

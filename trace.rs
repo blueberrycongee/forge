@@ -73,6 +73,31 @@ impl TraceReplay {
             sink.emit(runtime_event);
         }
     }
+
+    pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
+        let mut events = Vec::new();
+        for event in &trace.events {
+            let runtime_event = match event {
+                TraceEvent::NodeStart { node } => crate::langgraph::event::Event::StepStart {
+                    session_id: node.clone(),
+                },
+                TraceEvent::NodeFinish { node } => crate::langgraph::event::Event::StepFinish {
+                    session_id: node.clone(),
+                    tokens: crate::langgraph::event::TokenUsage::default(),
+                    cost: 0.0,
+                },
+                TraceEvent::Compacted { summary, truncated_before } => {
+                    crate::langgraph::event::Event::SessionCompacted {
+                        session_id: "replay".to_string(),
+                        summary: summary.clone(),
+                        truncated_before: *truncated_before,
+                    }
+                }
+            };
+            events.push(serde_json::to_value(runtime_event).expect("serialize"));
+        }
+        serde_json::Value::Array(events)
+    }
 }
 
 #[cfg(test)]
@@ -153,5 +178,16 @@ mod tests {
         let events = events.lock().unwrap();
         assert!(events.iter().any(|event| matches!(event, Event::StepStart { .. })));
         assert!(events.iter().any(|event| matches!(event, Event::SessionCompacted { .. })));
+    }
+
+    #[test]
+    fn trace_replay_to_json_emits_array() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        let json = TraceReplay::replay_to_json(&trace);
+        assert!(json.is_array());
+        assert_eq!(json.as_array().unwrap().len(), 1);
     }
 }

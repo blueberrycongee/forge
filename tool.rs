@@ -9,7 +9,7 @@ use crate::langgraph::error::GraphError;
 use serde::{Deserialize, Serialize};
 
 /// Tool lifecycle states for execution tracking.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ToolState {
     Pending,
     Running,
