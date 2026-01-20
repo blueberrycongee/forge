@@ -13,8 +13,9 @@ use crate::langgraph::constants::{START, END, MAX_ITERATIONS};
 use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
 use crate::langgraph::state::GraphState;
 use crate::langgraph::graph::{StateGraph, Edge};
-use crate::langgraph::event::EventSink;
+use crate::langgraph::event::{Event, EventSink};
 use crate::langgraph::compaction::{CompactionHook, NoopCompactionHook, CompactionResult};
+use crate::langgraph::prune::{PrunePolicy, prune_tool_events};
 use crate::langgraph::node::{Node, NodeSpec};
 use crate::langgraph::branch::{Branch, BranchSpec};
 use crate::langgraph::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
@@ -39,6 +40,10 @@ pub struct ExecutionConfig {
     pub collect_metrics: bool,
     /// Compaction hook for streaming execution
     pub compaction_hook: Arc<dyn CompactionHook>,
+    /// Prune policy for event history
+    pub prune_policy: PrunePolicy,
+    /// Optional event history buffer
+    pub event_history: Option<Arc<std::sync::Mutex<Vec<Event>>>>,
 }
 
 impl ExecutionConfig {
@@ -52,6 +57,8 @@ impl ExecutionConfig {
             config_id: "default".to_string(),
             collect_metrics: false,
             compaction_hook: Arc::new(NoopCompactionHook),
+            prune_policy: PrunePolicy::default(),
+            event_history: None,
         }
     }
 
@@ -66,6 +73,8 @@ impl ExecutionConfig {
             config_id: config_id.into(),
             collect_metrics: true,
             compaction_hook: Arc::new(NoopCompactionHook),
+            prune_policy: PrunePolicy::default(),
+            event_history: None,
         }
     }
 
@@ -98,6 +107,18 @@ impl ExecutionConfig {
     /// Set compaction hook for streaming execution
     pub fn with_compaction_hook(mut self, hook: Arc<dyn CompactionHook>) -> Self {
         self.compaction_hook = hook;
+        self
+    }
+
+    /// Set prune policy for event history
+    pub fn with_prune_policy(mut self, policy: PrunePolicy) -> Self {
+        self.prune_policy = policy;
+        self
+    }
+
+    /// Attach an event history buffer for stream_events
+    pub fn with_event_history(mut self, history: Arc<std::sync::Mutex<Vec<Event>>>) -> Self {
+        self.event_history = Some(history);
         self
     }
 
@@ -338,6 +359,17 @@ impl<S: GraphState> CompiledGraph<S> {
         let mut state = initial_state;
         let mut current_node = self.get_next_node(START, &state)?;
         let mut iterations = 0;
+        let use_history = self.config.prune_policy.enabled || self.config.event_history.is_some();
+        let history = self
+            .config
+            .event_history
+            .clone()
+            .unwrap_or_else(|| Arc::new(std::sync::Mutex::new(Vec::new())));
+        let sink: Arc<dyn EventSink> = if use_history {
+            Arc::new(RecordingSink::new(sink, Arc::clone(&history)))
+        } else {
+            sink
+        };
 
         while current_node != END && iterations < self.config.max_iterations {
             iterations += 1;
@@ -364,6 +396,11 @@ impl<S: GraphState> CompiledGraph<S> {
                     summary: result.summary,
                     truncated_before: result.truncated_before,
                 });
+            }
+
+            if use_history && self.config.prune_policy.enabled {
+                let mut events = history.lock().unwrap();
+                prune_tool_events(&mut events, &self.config.prune_policy);
             }
 
             current_node = self.get_next_node(&current_node, &state)?;
@@ -571,6 +608,24 @@ impl<S: GraphState> CompiledGraph<S> {
     }
 }
 
+struct RecordingSink {
+    inner: Arc<dyn EventSink>,
+    history: Arc<std::sync::Mutex<Vec<Event>>>,
+}
+
+impl RecordingSink {
+    fn new(inner: Arc<dyn EventSink>, history: Arc<std::sync::Mutex<Vec<Event>>>) -> Self {
+        Self { inner, history }
+    }
+}
+
+impl EventSink for RecordingSink {
+    fn emit(&self, event: Event) {
+        self.history.lock().unwrap().push(event.clone());
+        self.inner.emit(event);
+    }
+}
+
 // Need to implement Clone for CompiledGraph to support ablation studies
 impl<S: GraphState> Clone for CompiledGraph<S> {
     fn clone(&self) -> Self {
@@ -623,6 +678,7 @@ mod tests {
     use crate::langgraph::constants::START;
     use crate::langgraph::event::{Event, EventSink};
     use crate::langgraph::graph::StateGraph;
+    use crate::langgraph::prune::PrunePolicy;
     use crate::langgraph::state::GraphState;
     use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
@@ -745,6 +801,66 @@ mod tests {
             .iter()
             .any(|event| matches!(event, Event::SessionCompacted { .. })));
         assert_eq!(*hook_calls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn stream_events_prunes_event_history() {
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: Arc::new(Mutex::new(Vec::new())),
+        });
+        let history = Arc::new(Mutex::new(Vec::new()));
+
+        let mut graph = StateGraph::<StreamState>::new();
+        graph.add_stream_node("first", |state, sink| async move {
+            sink.emit(Event::ToolStart {
+                tool: "grep".to_string(),
+                call_id: "1".to_string(),
+                input: serde_json::json!({"q": "hi"}),
+            });
+            sink.emit(Event::ToolResult {
+                tool: "grep".to_string(),
+                call_id: "1".to_string(),
+                output: crate::langgraph::tool::ToolOutput::text("ok"),
+            });
+            Ok(state)
+        });
+        graph.add_stream_node("second", |state, sink| async move {
+            sink.emit(Event::TextDelta {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                delta: "hello".to_string(),
+            });
+            sink.emit(Event::ToolStart {
+                tool: "grep".to_string(),
+                call_id: "2".to_string(),
+                input: serde_json::json!({"q": "hi"}),
+            });
+            sink.emit(Event::ToolResult {
+                tool: "grep".to_string(),
+                call_id: "2".to_string(),
+                output: crate::langgraph::tool::ToolOutput::text("ok"),
+            });
+            Ok(state)
+        });
+        graph.add_edge(START, "first");
+        graph.add_edge("first", "second");
+        graph.add_edge("second", END);
+
+        let compiled = graph
+            .compile()
+            .expect("compile")
+            .with_config(
+                ExecutionConfig::new()
+                    .with_event_history(Arc::clone(&history))
+                    .with_prune_policy(PrunePolicy::new(2)),
+            );
+
+        let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
+
+        let events = history.lock().unwrap();
+        assert!(events.iter().any(|event| matches!(event, Event::TextDelta { .. })));
+        assert!(!events.iter().any(|event| matches!(event, Event::ToolStart { call_id, .. } if call_id == "1")));
+        assert!(events.iter().any(|event| matches!(event, Event::ToolStart { call_id, .. } if call_id == "2")));
     }
 }
 

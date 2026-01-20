@@ -519,3 +519,23 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Integrate pruning into executor/loop (apply to stored event history).
+
+## 2026-01-21 03:35:41 Phase 3 Round 5 (Prune Integration)
+
+- Date: 2026-01-21 03:35:41
+- Scope: Phase 3 round 5 - pruning integration in stream_events
+- Summary: Integrated prune policy into stream_events with recording sink + history buffer.
+- Changes:
+  - Added prune policy + event history buffer to ExecutionConfig.
+  - Added RecordingSink to capture emitted events into history.
+  - Applied prune_tool_events after each node when enabled.
+  - Added test verifying old tool events are pruned (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - Pruning only applies to stream_events history; invoke/invoke_with_metrics unchanged.
+  - History buffer is optional and not persisted by default.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add trace/replay data structures (TraceEvent/TraceSpan).
