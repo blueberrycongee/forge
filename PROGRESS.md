@@ -577,3 +577,25 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Add SessionSnapshot (messages + trace + compaction summaries).
+
+## 2026-01-21 03:39:50 Phase 3 Round 8 (Session Snapshot)
+
+- Date: 2026-01-21 03:39:50
+- Scope: Phase 3 round 8 - session snapshot export/import model
+- Summary: Added SessionSnapshot with messages, trace, and compaction summaries.
+- Changes:
+  - Added `SessionMessage` and `SessionSnapshot` (serde).
+  - Added roundtrip serialization test (TDD).
+  - Exported session snapshot types in prelude.
+  - Added serde derives to CompactionResult for snapshot support.
+- Files touched:
+  - `D:\Desktop\opencode\forge\session.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\opencode\forge\compaction.rs`
+- Known gaps / simplifications:
+  - Messages are minimal (role + content only).
+  - Snapshot does not capture tool events or permissions yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate trace + snapshot emission in executor.

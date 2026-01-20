@@ -21,7 +21,7 @@ impl CompactionPolicy {
 }
 
 /// Compaction output summary and truncation boundary.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CompactionResult {
     pub summary: String,
     pub truncated_before: usize,
