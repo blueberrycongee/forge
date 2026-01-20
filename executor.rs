@@ -17,7 +17,7 @@ use crate::langgraph::event::{Event, EventSink};
 use crate::langgraph::compaction::{CompactionHook, NoopCompactionHook, CompactionResult};
 use crate::langgraph::prune::{PrunePolicy, prune_tool_events};
 use crate::langgraph::trace::{ExecutionTrace, TraceEvent};
-use crate::langgraph::session::SessionSnapshot;
+use crate::langgraph::session::{SessionSnapshot, SessionMessage};
 use crate::langgraph::node::{Node, NodeSpec};
 use crate::langgraph::branch::{Branch, BranchSpec};
 use crate::langgraph::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
@@ -48,6 +48,8 @@ pub struct ExecutionConfig {
     pub event_history: Option<Arc<std::sync::Mutex<Vec<Event>>>>,
     /// Optional trace collector
     pub trace: Option<Arc<std::sync::Mutex<ExecutionTrace>>>,
+    /// Optional session snapshot collector
+    pub session_snapshot: Option<Arc<std::sync::Mutex<SessionSnapshot>>>,
 }
 
 impl ExecutionConfig {
@@ -64,6 +66,7 @@ impl ExecutionConfig {
             prune_policy: PrunePolicy::default(),
             event_history: None,
             trace: None,
+            session_snapshot: None,
         }
     }
 
@@ -81,6 +84,7 @@ impl ExecutionConfig {
             prune_policy: PrunePolicy::default(),
             event_history: None,
             trace: None,
+            session_snapshot: None,
         }
     }
 
@@ -131,6 +135,15 @@ impl ExecutionConfig {
     /// Attach trace collector for node events
     pub fn with_trace(mut self, trace: Arc<std::sync::Mutex<ExecutionTrace>>) -> Self {
         self.trace = Some(trace);
+        self
+    }
+
+    /// Attach session snapshot collector
+    pub fn with_session_snapshot(
+        mut self,
+        snapshot: Arc<std::sync::Mutex<SessionSnapshot>>,
+    ) -> Self {
+        self.session_snapshot = Some(snapshot);
         self
     }
 
@@ -378,6 +391,7 @@ impl<S: GraphState> CompiledGraph<S> {
             .clone()
             .unwrap_or_else(|| Arc::new(std::sync::Mutex::new(Vec::new())));
         let trace = self.config.trace.clone();
+        let snapshot = self.config.session_snapshot.clone();
         let sink: Arc<dyn EventSink> = if use_history {
             Arc::new(RecordingSink::new(sink, Arc::clone(&history)))
         } else {
@@ -407,6 +421,12 @@ impl<S: GraphState> CompiledGraph<S> {
                     });
             }
             state = node.execute_stream(state, sink.clone()).await?;
+            if let Some(snapshot) = &snapshot {
+                snapshot.lock().unwrap().messages.push(SessionMessage {
+                    role: "system".to_string(),
+                    content: format!("node:{}:executed", current_node),
+                });
+            }
             if let Some(trace) = &trace {
                 trace
                     .lock()
@@ -425,6 +445,9 @@ impl<S: GraphState> CompiledGraph<S> {
                         summary: result.summary.clone(),
                         truncated_before: result.truncated_before,
                     });
+                }
+                if let Some(snapshot) = &snapshot {
+                    snapshot.lock().unwrap().compactions.push(result.clone());
                 }
                 sink.emit(crate::langgraph::event::Event::SessionCompacted {
                     session_id,
@@ -650,11 +673,23 @@ impl<S: GraphState> CompiledGraph<S> {
             .as_ref()
             .map(|trace| trace.lock().unwrap().clone())
             .unwrap_or_else(ExecutionTrace::new);
+        let messages = self
+            .config
+            .session_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.lock().unwrap().messages.clone())
+            .unwrap_or_default();
+        let compactions = self
+            .config
+            .session_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.lock().unwrap().compactions.clone())
+            .unwrap_or_default();
         SessionSnapshot {
             session_id: session_id.into(),
-            messages: Vec::new(),
+            messages,
             trace,
-            compactions: Vec::new(),
+            compactions,
         }
     }
 }
@@ -903,6 +938,35 @@ mod tests {
         let trace = trace.lock().unwrap();
         assert!(trace.events.iter().any(|event| matches!(event, TraceEvent::NodeStart { .. })));
         assert!(trace.events.iter().any(|event| matches!(event, TraceEvent::NodeFinish { .. })));
+    }
+
+    #[test]
+    fn stream_events_updates_session_snapshot() {
+        let trace = Arc::new(Mutex::new(ExecutionTrace::new()));
+        let snapshot = Arc::new(Mutex::new(SessionSnapshot::new("s1")));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: Arc::new(Mutex::new(Vec::new())),
+        });
+
+        let mut graph = StateGraph::<StreamState>::new();
+        graph.add_stream_node("node", |state, _sink| async move { Ok(state) });
+        graph.add_edge(START, "node");
+        graph.add_edge("node", END);
+
+        let compiled = graph
+            .compile()
+            .expect("compile")
+            .with_config(
+                ExecutionConfig::new()
+                    .with_trace(Arc::clone(&trace))
+                    .with_session_snapshot(Arc::clone(&snapshot)),
+            );
+
+        let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
+
+        let snapshot = snapshot.lock().unwrap();
+        assert!(!snapshot.messages.is_empty());
+        assert!(snapshot.compactions.is_empty());
     }
 }
 

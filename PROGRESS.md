@@ -620,3 +620,23 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Wire SessionSnapshot emission to include messages and compactions.
+
+## 2026-01-21 03:45:34 Phase 3 Round 10 (Snapshot Integration)
+
+- Date: 2026-01-21 03:45:34
+- Scope: Phase 3 round 10 - session snapshot integration
+- Summary: Integrated SessionSnapshot updates in stream_events and exposed builder helper.
+- Changes:
+  - Added session snapshot collector to ExecutionConfig.
+  - stream_events now appends synthetic node messages and compaction results.
+  - build_snapshot now returns collected messages + compactions + trace.
+  - Added test validating snapshot updates (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - Messages are synthetic “node executed” entries, not real chat history.
+  - Compactions only recorded when compaction hook triggers.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 3 closeout: document remaining optional items or mark complete.
