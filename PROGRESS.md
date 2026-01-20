@@ -781,6 +781,23 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 8: closeout / optional file IO for audit log.
 
+## 2026-01-21 04:01:47 Phase 4 Round 8 (Audit Log IO)
+
+- Date: 2026-01-21 04:01:47
+- Scope: Phase 4 round 8 - audit log file IO
+- Summary: Added audit log writer for replayed trace events.
+- Changes:
+  - Added `TraceReplay::write_audit_log` to write JSON audit logs to disk.
+  - Added unit test for audit log write (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\trace.rs`
+- Known gaps / simplifications:
+  - Audit log path handling is minimal (writes snapshot.json only).
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 closeout: mark completion and list optional gaps.
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01

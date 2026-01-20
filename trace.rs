@@ -98,6 +98,20 @@ impl TraceReplay {
         }
         serde_json::Value::Array(events)
     }
+
+    pub fn write_audit_log(
+        trace: &ExecutionTrace,
+        path: impl AsRef<std::path::Path>,
+    ) -> std::io::Result<()> {
+        let json = Self::replay_to_json(trace);
+        let data = serde_json::to_string_pretty(&json)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        if let Some(parent) = path.as_ref().parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, data)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -189,5 +203,20 @@ mod tests {
         let json = TraceReplay::replay_to_json(&trace);
         assert!(json.is_array());
         assert_eq!(json.as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn trace_replay_write_audit_log() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        let path = std::env::temp_dir().join(format!(
+            "forge-audit-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        TraceReplay::write_audit_log(&trace, &path).expect("write");
+        let contents = std::fs::read_to_string(path).expect("read");
+        assert!(contents.contains("StepStart"));
     }
 }
