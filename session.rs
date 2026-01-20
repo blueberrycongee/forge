@@ -45,11 +45,50 @@ impl SessionSnapshotIo {
     pub fn from_json(value: serde_json::Value) -> Result<SessionSnapshot, serde_json::Error> {
         serde_json::from_value(value)
     }
+
+    pub fn to_string(snapshot: &SessionSnapshot) -> String {
+        serde_json::to_string_pretty(snapshot).expect("serialize")
+    }
+
+    pub fn from_string(input: &str) -> Result<SessionSnapshot, serde_json::Error> {
+        serde_json::from_str(input)
+    }
+}
+
+/// Session snapshot persistence adapter.
+pub struct SessionStore {
+    root: std::path::PathBuf,
+}
+
+impl SessionStore {
+    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    fn session_dir(&self, session_id: &str) -> std::path::PathBuf {
+        self.root.join(session_id)
+    }
+
+    pub fn save(&self, snapshot: &SessionSnapshot) -> std::io::Result<()> {
+        let dir = self.session_dir(&snapshot.session_id);
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join("snapshot.json");
+        std::fs::write(path, SessionSnapshotIo::to_string(snapshot))?;
+        Ok(())
+    }
+
+    pub fn load(&self, session_id: &str) -> std::io::Result<SessionSnapshot> {
+        let path = self.session_dir(session_id).join("snapshot.json");
+        let data = std::fs::read_to_string(path)?;
+        let snapshot = SessionSnapshotIo::from_string(&data)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        Ok(snapshot)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionMessage, SessionSnapshot};
+    use super::{SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
     use crate::langgraph::compaction::CompactionResult;
     use crate::langgraph::trace::TraceEvent;
 
@@ -73,8 +112,19 @@ mod tests {
     #[test]
     fn session_snapshot_io_helpers_roundtrip() {
         let snapshot = SessionSnapshot::new("s1");
-        let json = super::SessionSnapshotIo::to_json(&snapshot);
-        let decoded = super::SessionSnapshotIo::from_json(json).expect("decode");
+        let json = SessionSnapshotIo::to_json(&snapshot);
+        let decoded = SessionSnapshotIo::from_json(json).expect("decode");
         assert_eq!(snapshot, decoded);
+    }
+
+    #[test]
+    fn session_snapshot_store_roundtrip() {
+        let temp = std::env::temp_dir().join(format!("forge-session-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(temp);
+        let snapshot = SessionSnapshot::new("s1");
+
+        store.save(&snapshot).expect("save");
+        let loaded = store.load("s1").expect("load");
+        assert_eq!(snapshot, loaded);
     }
 }

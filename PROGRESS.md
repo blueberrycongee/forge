@@ -741,6 +741,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 6: session history storage layer (filesystem adapter).
 
+## 2026-01-21 03:58:37 Phase 4 Round 6 (Session Store)
+
+- Date: 2026-01-21 03:58:37
+- Scope: Phase 4 round 6 - session storage adapter
+- Summary: Added SessionStore filesystem adapter with JSON read/write.
+- Changes:
+  - Added SessionSnapshotIo string helpers.
+  - Added SessionStore with save/load to snapshot.json under session directory.
+  - Added unit test for store roundtrip (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\session.rs`
+- Known gaps / simplifications:
+  - No locking or concurrency strategy for store writes.
+  - No version migration handling.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 7: event replay/audit log export wiring.
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01
