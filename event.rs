@@ -18,7 +18,7 @@ pub struct TokenUsage {
 }
 
 /// Permission reply outcomes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PermissionReply {
     Once,
     Always,

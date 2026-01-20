@@ -1,5 +1,10 @@
 //! Permission evaluation primitives for tool/operation gating.
 
+use serde::{Deserialize, Serialize};
+
+use crate::langgraph::error::ResumeCommand;
+use crate::langgraph::event::PermissionReply;
+
 /// Permission decision outcome.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PermissionDecision {
@@ -53,6 +58,82 @@ impl PermissionGate for PermissionPolicy {
     }
 }
 
+#[derive(Default)]
+struct PermissionOverrides {
+    once: std::collections::HashSet<String>,
+    always: std::collections::HashSet<String>,
+    reject: std::collections::HashSet<String>,
+}
+
+impl PermissionOverrides {
+    fn decide(&mut self, permission: &str) -> Option<PermissionDecision> {
+        if self.reject.contains(permission) {
+            return Some(PermissionDecision::Deny);
+        }
+        if self.always.contains(permission) {
+            return Some(PermissionDecision::Allow);
+        }
+        if self.once.remove(permission) {
+            return Some(PermissionDecision::Allow);
+        }
+        None
+    }
+
+    fn apply_reply(&mut self, permission: &str, reply: crate::langgraph::event::PermissionReply) {
+        match reply {
+            crate::langgraph::event::PermissionReply::Once => {
+                self.once.insert(permission.to_string());
+            }
+            crate::langgraph::event::PermissionReply::Always => {
+                self.always.insert(permission.to_string());
+            }
+            crate::langgraph::event::PermissionReply::Reject => {
+                self.reject.insert(permission.to_string());
+            }
+        }
+    }
+}
+
+/// Mutable permission session that can accept runtime replies.
+pub struct PermissionSession {
+    base: PermissionPolicy,
+    overrides: std::sync::Mutex<PermissionOverrides>,
+}
+
+impl PermissionSession {
+    pub fn new(base: PermissionPolicy) -> Self {
+        Self {
+            base,
+            overrides: std::sync::Mutex::new(PermissionOverrides::default()),
+        }
+    }
+
+    pub fn apply_reply(&self, permission: &str, reply: crate::langgraph::event::PermissionReply) {
+        let mut overrides = self.overrides.lock().unwrap();
+        overrides.apply_reply(permission, reply);
+    }
+
+    pub fn apply_resume(
+        &self,
+        permission: &str,
+        command: &ResumeCommand,
+    ) -> Option<PermissionReply> {
+        let reply = parse_permission_reply(&command.value)?;
+        self.apply_reply(permission, reply.clone());
+        Some(reply)
+    }
+}
+
+impl PermissionGate for PermissionSession {
+    fn decide(&self, permission: &str) -> PermissionDecision {
+        let mut overrides = self.overrides.lock().unwrap();
+        if let Some(decision) = overrides.decide(permission) {
+            return decision;
+        }
+        self.base.decide(permission)
+    }
+}
+
 fn matches_pattern(pattern: &str, permission: &str) -> bool {
     if pattern == "*" {
         return true;
@@ -63,9 +144,45 @@ fn matches_pattern(pattern: &str, permission: &str) -> bool {
     permission == pattern
 }
 
+/// Permission request payload used in interrupts.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PermissionRequest {
+    pub permission: String,
+    pub patterns: Vec<String>,
+}
+
+fn parse_permission_reply(value: &serde_json::Value) -> Option<PermissionReply> {
+    match value {
+        serde_json::Value::String(value) => parse_reply_str(value),
+        serde_json::Value::Object(map) => map
+            .get("reply")
+            .and_then(|reply| reply.as_str())
+            .and_then(parse_reply_str),
+        _ => None,
+    }
+}
+
+fn parse_reply_str(value: &str) -> Option<PermissionReply> {
+    match value.to_lowercase().as_str() {
+        "once" => Some(PermissionReply::Once),
+        "always" => Some(PermissionReply::Always),
+        "reject" | "deny" => Some(PermissionReply::Reject),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{PermissionDecision, PermissionPolicy, PermissionRule};
+    use super::{
+        PermissionDecision,
+        PermissionGate,
+        PermissionPolicy,
+        PermissionRequest,
+        PermissionRule,
+        PermissionSession,
+    };
+    use crate::langgraph::error::ResumeCommand;
+    use crate::langgraph::event::PermissionReply;
 
     #[test]
     fn permission_policy_uses_first_match() {
@@ -94,5 +211,66 @@ mod tests {
     fn permission_policy_defaults_to_allow() {
         let policy = PermissionPolicy::new(vec![]);
         assert_eq!(policy.decide("file:write"), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn permission_session_once_consumes_override() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:echo", PermissionReply::Once);
+
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn permission_session_always_allows() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:echo", PermissionReply::Always);
+
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn permission_session_reject_denies() {
+        let base = PermissionPolicy::new(vec![]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:rm", PermissionReply::Reject);
+
+        assert_eq!(session.decide("tool:rm"), PermissionDecision::Deny);
+    }
+
+    #[test]
+    fn permission_session_applies_resume_command() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        let command = ResumeCommand::new("once");
+        let reply = session.apply_resume("tool:echo", &command);
+
+        assert_eq!(reply, Some(PermissionReply::Once));
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn permission_request_roundtrip() {
+        let request = PermissionRequest {
+            permission: "tool:echo".to_string(),
+            patterns: vec!["tool:echo".to_string()],
+        };
+        let json = serde_json::to_value(&request).expect("serialize");
+        let decoded: PermissionRequest = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(request, decoded);
     }
 }

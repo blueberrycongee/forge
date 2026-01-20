@@ -284,3 +284,54 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Add permission reply/resume flow (PermissionReplied + Interrupt handling).
   - Introduce ToolOutput schema/metadata helpers (typed fields).
+
+## 2026-01-21 02:51:24 Permission Reply Flow (Phase 2)
+
+- Date: 2026-01-21 02:51:24
+- Scope: Phase 2 permission reply handling
+- Summary: Added PermissionSession with runtime overrides and wired replies into LoopContext.
+- Changes:
+  - Added `PermissionSession` with override sets for once/always/reject replies.
+  - Implemented `PermissionSession::apply_reply` and override-aware `decide`.
+  - Added `LoopContext::reply_permission` to emit PermissionReplied events.
+  - Updated LoopNode/LoopContext to use PermissionSession.
+  - Added tests for once/always/reject overrides and for reply-based tool execution (TDD).
+  - Exported PermissionSession in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\permission.rs`
+  - `D:\Desktop\opencode\forge\loop.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Ask/deny still return ExecutionError; no Interrupt resume command yet.
+  - PermissionAsked includes only direct permission string as pattern.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add interrupt-based resume flow (PermissionReply via ResumeCommand).
+  - Add ToolOutput schema/metadata helpers (typed fields).
+
+## 2026-01-21 03:07:00 Permission Interrupt Resume (Phase 2)
+
+- Date: 2026-01-21 03:07:00
+- Scope: Phase 2 permission interrupt/resume flow
+- Summary: Permission ask now raises Interrupt with request payload; ResumeCommand can approve via PermissionSession.
+- Changes:
+  - Added `PermissionRequest` payload (serde) for interrupt value.
+  - Added `PermissionSession::apply_resume` to parse ResumeCommand values.
+  - Added `LoopContext::resume_permission` to emit PermissionReplied on resume.
+  - Updated LoopContext tool execution to return GraphError::Interrupted on ask.
+  - Added tests for resume parsing, interrupt payload, and resume-based tool execution (TDD).
+  - Derived PartialEq for PermissionReply to simplify assertions.
+- Files touched:
+  - `D:\Desktop\opencode\forge\permission.rs`
+  - `D:\Desktop\opencode\forge\loop.rs`
+  - `D:\Desktop\opencode\forge\event.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Interrupt resume is local-only (no session persistence yet).
+  - PermissionAsked patterns still mirror the requested permission string.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add ToolOutput schema/metadata helpers (typed fields).
+  - Add persistence hooks for permission sessions (store/resume by session id).

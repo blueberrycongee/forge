@@ -1,8 +1,14 @@
 ﻿use std::sync::Arc;
 
 use crate::langgraph::event::{Event, EventSink};
-use crate::langgraph::error::{GraphError, GraphResult};
-use crate::langgraph::permission::{PermissionDecision, PermissionGate, PermissionPolicy};
+use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
+use crate::langgraph::permission::{
+    PermissionDecision,
+    PermissionGate,
+    PermissionPolicy,
+    PermissionRequest,
+    PermissionSession,
+};
 use crate::langgraph::node::NodeSpec;
 use crate::langgraph::state::GraphState;
 use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
@@ -12,24 +18,52 @@ use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
 pub struct LoopContext {
     sink: Arc<dyn EventSink>,
     tools: Arc<ToolRegistry>,
-    gate: Arc<dyn PermissionGate>,
+    gate: Arc<PermissionSession>,
 }
 
 impl LoopContext {
     pub fn new(sink: Arc<dyn EventSink>, tools: Arc<ToolRegistry>) -> Self {
-        Self::new_with_gate(sink, tools, Arc::new(PermissionPolicy::default()))
+        Self::new_with_gate(
+            sink,
+            tools,
+            Arc::new(PermissionSession::new(PermissionPolicy::default())),
+        )
     }
 
     pub fn new_with_gate(
         sink: Arc<dyn EventSink>,
         tools: Arc<ToolRegistry>,
-        gate: Arc<dyn PermissionGate>,
+        gate: Arc<PermissionSession>,
     ) -> Self {
         Self { sink, tools, gate }
     }
 
     pub fn emit(&self, event: Event) {
         self.sink.emit(event);
+    }
+
+    pub fn reply_permission(
+        &self,
+        permission: impl Into<String>,
+        reply: crate::langgraph::event::PermissionReply,
+    ) {
+        let permission = permission.into();
+        self.gate.apply_reply(&permission, reply.clone());
+        self.emit(Event::PermissionReplied { permission, reply });
+    }
+
+    pub fn resume_permission(
+        &self,
+        permission: impl Into<String>,
+        command: &ResumeCommand,
+    ) -> Option<crate::langgraph::event::PermissionReply> {
+        let permission = permission.into();
+        let reply = self.gate.apply_resume(&permission, command)?;
+        self.emit(Event::PermissionReplied {
+            permission,
+            reply: reply.clone(),
+        });
+        Some(reply)
     }
 
     pub async fn run_tool(&self, call: ToolCall) -> GraphResult<ToolOutput> {
@@ -45,10 +79,13 @@ impl LoopContext {
                     permission: permission.clone(),
                     patterns: vec![permission.clone()],
                 });
-                Err(GraphError::ExecutionError {
-                    node: format!("permission:{}", permission),
-                    message: "permission required".to_string(),
-                })
+                Err(GraphError::Interrupted(vec![Interrupt::new(
+                    PermissionRequest {
+                        permission: permission.clone(),
+                        patterns: vec![permission.clone()],
+                    },
+                    format!("permission:{}", permission),
+                )]))
             }
             PermissionDecision::Deny => Err(GraphError::ExecutionError {
                 node: format!("permission:{}", permission),
@@ -65,7 +102,7 @@ impl LoopContext {
 pub struct LoopNode<S: GraphState> {
     name: String,
     tools: Arc<ToolRegistry>,
-    gate: Arc<dyn PermissionGate>,
+    gate: Arc<PermissionSession>,
     handler: Arc<
         dyn Fn(S, LoopContext) -> crate::langgraph::node::BoxFuture<'static, GraphResult<S>>
             + Send
@@ -80,7 +117,7 @@ impl<S: GraphState> LoopNode<S> {
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
     {
         let tools = Arc::new(ToolRegistry::new());
-        let gate: Arc<dyn PermissionGate> = Arc::new(PermissionPolicy::default());
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
         Self::with_tools_and_gate(name, tools, gate, handler)
     }
 
@@ -93,14 +130,14 @@ impl<S: GraphState> LoopNode<S> {
         F: Fn(S, LoopContext) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
     {
-        let gate: Arc<dyn PermissionGate> = Arc::new(PermissionPolicy::default());
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
         Self::with_tools_and_gate(name, tools, gate, handler)
     }
 
     pub fn with_tools_and_gate<F, Fut>(
         name: impl Into<String>,
         tools: Arc<ToolRegistry>,
-        gate: Arc<dyn PermissionGate>,
+        gate: Arc<PermissionSession>,
         handler: F,
     ) -> Self
     where
@@ -147,13 +184,13 @@ impl<S: GraphState> LoopNode<S> {
 mod tests {
     use super::*;
     use crate::langgraph::event::{Event, EventSink};
-    use crate::langgraph::permission::{PermissionDecision, PermissionPolicy, PermissionRule};
+    use crate::langgraph::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
     use crate::langgraph::state::GraphState;
     use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
     use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
 
-    #[derive(Clone, Default)]
+    #[derive(Clone, Default, Debug)]
     struct LoopState {
         log: Vec<String>,
     }
@@ -227,10 +264,10 @@ mod tests {
             Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);
-        let gate = Arc::new(PermissionPolicy::new(vec![PermissionRule::new(
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![PermissionRule::new(
             PermissionDecision::Ask,
             vec!["tool:echo".to_string()],
-        )]));
+        )])));
 
         let node = LoopNode::with_tools_and_gate(
             "loop",
@@ -244,9 +281,93 @@ mod tests {
         );
 
         let result = block_on(node.run(LoopState::default(), sink));
-        assert!(result.is_err());
+        match result {
+            Err(GraphError::Interrupted(interrupts)) => {
+                assert_eq!(interrupts.len(), 1);
+                let value = &interrupts[0].value;
+                let request: PermissionRequest =
+                    serde_json::from_value(value.clone()).expect("permission request");
+                assert_eq!(request.permission, "tool:echo");
+            }
+            other => panic!("expected interrupted, got {:?}", other),
+        }
         let captured = events.lock().unwrap();
         assert!(captured.iter().any(|event| matches!(event, Event::PermissionAsked { .. })));
         assert!(!captured.iter().any(|event| matches!(event, Event::ToolStart { .. })));
+    }
+
+    #[test]
+    fn loop_context_allows_after_permission_reply() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let mut registry = ToolRegistry::new();
+        registry.register("echo", Arc::new(|call| {
+            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
+        }));
+        let registry = Arc::new(registry);
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )])));
+
+        let node = LoopNode::with_tools_and_gate(
+            "loop",
+            Arc::clone(&registry),
+            gate,
+            |state: LoopState, ctx| async move {
+                ctx.reply_permission("tool:echo", crate::langgraph::event::PermissionReply::Once);
+                ctx.run_tool(ToolCall::new("echo", "call-ok", serde_json::json!({})))
+                    .await?;
+                Ok(state)
+            },
+        );
+
+        let result = block_on(node.run(LoopState::default(), sink));
+        assert!(result.is_ok());
+        let captured = events.lock().unwrap();
+        assert!(captured
+            .iter()
+            .any(|event| matches!(event, Event::PermissionReplied { .. })));
+        assert!(captured
+            .iter()
+            .any(|event| matches!(event, Event::ToolResult { .. })));
+    }
+
+    #[test]
+    fn loop_context_resumes_permission_from_command() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let mut registry = ToolRegistry::new();
+        registry.register("echo", Arc::new(|call| {
+            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
+        }));
+        let registry = Arc::new(registry);
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )])));
+        let resume = ResumeCommand::new("once");
+
+        let node = LoopNode::with_tools_and_gate(
+            "loop",
+            Arc::clone(&registry),
+            gate,
+            move |state: LoopState, ctx| {
+                let resume = resume.clone();
+                async move {
+                    ctx.resume_permission("tool:echo", &resume);
+                ctx.run_tool(ToolCall::new("echo", "call-resume", serde_json::json!({})))
+                    .await?;
+                Ok(state)
+                }
+            },
+        );
+
+        let result = block_on(node.run(LoopState::default(), sink));
+        assert!(result.is_ok());
+        let captured = events.lock().unwrap();
+        assert!(captured
+            .iter()
+            .any(|event| matches!(event, Event::PermissionReplied { .. })));
     }
 }
