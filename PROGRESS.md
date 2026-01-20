@@ -420,3 +420,43 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce tool-specific output structs (ReadOutput, GrepOutput, LsOutput).
   - Wire PermissionStore into a higher-level session manager (future).
+
+## 2026-01-21 03:26:22 Phase 2 Complete (MVP-1)
+
+- Date: 2026-01-21 03:26:22
+- Scope: Phase 2 closeout
+- Summary: Phase 2 core goals completed (LoopNode + permissions + tool lifecycle + structured output + persistence hooks).
+- Changes:
+  - Marked Phase 2 as complete.
+- Files touched:
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Optional: tool-specific output structs (ReadOutput/GrepOutput/LsOutput).
+  - Optional: wire PermissionStore into a higher-level session manager.
+  - Optional: stricter schema validation or official schema list.
+- Validation:
+  - N/A (status update only).
+- Next steps:
+  - Begin Phase 3 (compaction/prune + trace/replay).
+
+## 2026-01-21 03:28:07 Phase 3 Round 1 (Compaction Model)
+
+- Date: 2026-01-21 03:28:07
+- Scope: Phase 3 round 1 - compaction policy/result + event
+- Summary: Added compaction policy/result types and session compaction event.
+- Changes:
+  - Added `CompactionPolicy` and `CompactionResult` with basic helpers.
+  - Added `Event::SessionCompacted` for compaction notifications.
+  - Exported compaction types in prelude.
+  - Added unit tests for policy threshold and result structure (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\compaction.rs`
+  - `D:\Desktop\opencode\forge\event.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - No executor integration yet (compaction not triggered).
+  - CompactionResult does not include summary prompt or token usage.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add compaction hook trait and wiring points in executor/loop.

@@ -69,6 +69,11 @@ pub enum Event {
         permission: String,
         reply: PermissionReply,
     },
+    SessionCompacted {
+        session_id: String,
+        summary: String,
+        truncated_before: usize,
+    },
 }
 
 #[cfg(test)]
