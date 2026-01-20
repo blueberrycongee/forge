@@ -127,6 +127,14 @@ impl SessionStore {
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
         Ok(snapshot)
     }
+
+    pub fn load_messages(
+        &self,
+        session_id: &str,
+    ) -> std::io::Result<Vec<crate::runtime::message::Message>> {
+        let snapshot = self.load(session_id)?;
+        Ok(snapshot.to_messages())
+    }
 }
 
 #[cfg(test)]
@@ -171,6 +179,51 @@ mod tests {
         store.save(&snapshot).expect("save");
         let loaded = store.load("s1").expect("load");
         assert_eq!(snapshot, loaded);
+    }
+
+    #[test]
+    fn session_store_load_messages_restores_text_parts() {
+        let temp = std::env::temp_dir().join(format!("forge-session-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(temp);
+        let snapshot = SessionSnapshot {
+            version: 1,
+            session_id: "s1".to_string(),
+            messages: vec![
+                SessionMessage {
+                    role: "user".to_string(),
+                    content: "hi".to_string(),
+                },
+                SessionMessage {
+                    role: "assistant".to_string(),
+                    content: "hello".to_string(),
+                },
+                SessionMessage {
+                    role: "unknown".to_string(),
+                    content: "skip".to_string(),
+                },
+            ],
+            trace: ExecutionTrace::new(),
+            compactions: Vec::new(),
+        };
+
+        store.save(&snapshot).expect("save");
+        let messages = store.load_messages("s1").expect("load messages");
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::User);
+        assert_eq!(
+            messages[0].parts,
+            vec![Part::TextFinal {
+                text: "hi".to_string()
+            }]
+        );
+        assert_eq!(messages[1].role, MessageRole::Assistant);
+        assert_eq!(
+            messages[1].parts,
+            vec![Part::TextFinal {
+                text: "hello".to_string()
+            }]
+        );
     }
 
     #[test]

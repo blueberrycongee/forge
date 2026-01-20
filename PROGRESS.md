@@ -968,3 +968,23 @@ un and into_node methods.
 - Next steps:
   - Wire snapshot replay (`SessionSnapshot::to_messages`) into restore paths.
   - Extend snapshot conversion to include tool results/attachments when needed.
+
+## 2026-01-21 05:48:41 SessionStore Message Restore (Phase 5)
+
+- Date: 2026-01-21 05:48:41
+- Scope: Phase 5 snapshot restore helper
+- Summary: Added SessionStore helper to rehydrate structured messages from persisted snapshots.
+- Changes:
+  - Added `SessionStore::load_messages` to load snapshots and convert to structured messages.
+  - Added TDD coverage for restored messages and unknown role filtering.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Restored messages only contain text parts; tool outputs/attachments are still omitted.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Use `SessionStore::load_messages` in session restore flows (loop/session manager).
+  - Extend snapshot conversion to include tool results/attachments when needed.
