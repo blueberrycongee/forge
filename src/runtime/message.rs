@@ -89,6 +89,9 @@ impl Part {
             Event::TextDelta { delta, .. } => Some(Part::TextDelta {
                 delta: delta.clone(),
             }),
+            Event::TextFinal { text, .. } => Some(Part::TextFinal {
+                text: text.clone(),
+            }),
             Event::ToolStart {
                 tool,
                 call_id,
@@ -148,6 +151,22 @@ mod tests {
             Part::from_event(&event),
             Some(Part::TextDelta {
                 delta: "hi".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn part_from_event_maps_text_final() {
+        let event = Event::TextFinal {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            text: "done".to_string(),
+        };
+
+        assert_eq!(
+            Part::from_event(&event),
+            Some(Part::TextFinal {
+                text: "done".to_string()
             })
         );
     }

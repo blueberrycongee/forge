@@ -1073,3 +1073,27 @@ un and into_node methods.
 - Next steps:
   - Integrate SessionState apply_event/finalize flow into LoopNode/loop execution.
   - Expand event mapping to include TextFinal and TokenUsage parts.
+
+## 2026-01-21 05:58:24 SessionState TextFinal/TokenUsage (Phase 5)
+
+- Date: 2026-01-21 05:58:24
+- Scope: Phase 5 session state event ingestion expansion
+- Summary: Added TextFinal and TokenUsage handling to SessionState event mapping.
+- Changes:
+  - Added `Event::TextFinal` variant and mapping to `Part::TextFinal`.
+  - Extended `SessionState::apply_event` to handle TextFinal and StepFinish token usage.
+  - Added TDD coverage for text final and token usage ingestion.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - apply_event still ignores attachments and errors beyond tool lifecycle.
+  - Tool call tracking stores minimal status only (no timestamps).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate SessionState apply_event/finalize flow into LoopNode/loop execution.
+  - Add attachment/error handling in event ingestion.

@@ -115,6 +115,12 @@ impl SessionState {
                 });
                 true
             }
+            Event::TextFinal { text, .. } => {
+                self.pending_parts.push(Part::TextFinal {
+                    text: text.clone(),
+                });
+                true
+            }
             Event::ToolStart {
                 tool,
                 call_id,
@@ -158,6 +164,12 @@ impl SessionState {
                 self.update_tool_call(call_id, ToolCallStatus::Error);
                 true
             }
+            Event::StepFinish { tokens, .. } => {
+                self.pending_parts.push(Part::TokenUsage {
+                    usage: tokens.clone(),
+                });
+                true
+            }
             _ => false,
         }
     }
@@ -166,7 +178,7 @@ impl SessionState {
 #[cfg(test)]
 mod tests {
     use super::{SessionRouting, SessionState, ToolCallStatus};
-    use crate::runtime::event::Event;
+    use crate::runtime::event::{Event, TokenUsage};
     use crate::runtime::message::{MessageRole, Part};
     use crate::runtime::tool::ToolOutput;
 
@@ -292,5 +304,53 @@ mod tests {
         assert!(state.apply_event(&result));
         assert_eq!(state.tool_calls[0].status, ToolCallStatus::Completed);
         assert_eq!(state.pending_parts.len(), 2);
+    }
+
+    #[test]
+    fn session_state_apply_event_appends_text_final() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::TextFinal {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            text: "done".to_string(),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.pending_parts,
+            vec![Part::TextFinal {
+                text: "done".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn session_state_apply_event_appends_token_usage() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::StepFinish {
+            session_id: "s1".to_string(),
+            tokens: TokenUsage {
+                input: 1,
+                output: 2,
+                reasoning: 3,
+                cache_read: 4,
+                cache_write: 5,
+            },
+            cost: 0.01,
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.pending_parts,
+            vec![Part::TokenUsage {
+                usage: TokenUsage {
+                    input: 1,
+                    output: 2,
+                    reasoning: 3,
+                    cache_read: 4,
+                    cache_write: 5,
+                }
+            }]
+        );
     }
 }

@@ -33,6 +33,11 @@ pub enum Event {
         message_id: String,
         delta: String,
     },
+    TextFinal {
+        session_id: String,
+        message_id: String,
+        text: String,
+    },
     ToolStart {
         tool: String,
         call_id: String,
