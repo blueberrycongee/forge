@@ -102,7 +102,7 @@ pub mod prelude {
     pub use crate::langgraph::compaction::{CompactionPolicy, CompactionResult};
     pub use crate::langgraph::prune::{PrunePolicy, PruneResult};
     pub use crate::langgraph::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
-    pub use crate::langgraph::session::{SessionMessage, SessionSnapshot};
+    pub use crate::langgraph::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
     pub use crate::langgraph::permission::{
         PermissionDecision,
         PermissionGate,

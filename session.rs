@@ -15,6 +15,7 @@ pub struct SessionMessage {
 /// Session snapshot containing messages, trace, and compaction summaries.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionSnapshot {
+    pub version: u32,
     pub session_id: String,
     pub messages: Vec<SessionMessage>,
     pub trace: ExecutionTrace,
@@ -24,11 +25,25 @@ pub struct SessionSnapshot {
 impl SessionSnapshot {
     pub fn new(session_id: impl Into<String>) -> Self {
         Self {
+            version: 1,
             session_id: session_id.into(),
             messages: Vec::new(),
             trace: ExecutionTrace::new(),
             compactions: Vec::new(),
         }
+    }
+}
+
+/// Session snapshot IO helpers.
+pub struct SessionSnapshotIo;
+
+impl SessionSnapshotIo {
+    pub fn to_json(snapshot: &SessionSnapshot) -> serde_json::Value {
+        serde_json::to_value(snapshot).expect("serialize")
+    }
+
+    pub fn from_json(value: serde_json::Value) -> Result<SessionSnapshot, serde_json::Error> {
+        serde_json::from_value(value)
     }
 }
 
@@ -52,6 +67,14 @@ mod tests {
 
         let json = serde_json::to_value(&snapshot).expect("serialize");
         let decoded: SessionSnapshot = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(snapshot, decoded);
+    }
+
+    #[test]
+    fn session_snapshot_io_helpers_roundtrip() {
+        let snapshot = SessionSnapshot::new("s1");
+        let json = super::SessionSnapshotIo::to_json(&snapshot);
+        let decoded = super::SessionSnapshotIo::from_json(json).expect("decode");
         assert_eq!(snapshot, decoded);
     }
 }

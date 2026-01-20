@@ -722,6 +722,7 @@ impl<S: GraphState> CompiledGraph<S> {
             .map(|snapshot| snapshot.lock().unwrap().compactions.clone())
             .unwrap_or_default();
         SessionSnapshot {
+            version: 1,
             session_id: session_id.into(),
             messages,
             trace,

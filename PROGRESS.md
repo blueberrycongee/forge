@@ -719,6 +719,28 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 5: snapshot export/import IO + versioning.
 
+## 2026-01-21 03:57:06 Phase 4 Round 5 (Snapshot IO + Version)
+
+- Date: 2026-01-21 03:57:06
+- Scope: Phase 4 round 5 - snapshot IO + versioning
+- Summary: Added snapshot version field and IO helpers for JSON export/import.
+- Changes:
+  - Added `version` to SessionSnapshot (default 1).
+  - Added `SessionSnapshotIo` helpers for to/from JSON.
+  - Updated build_snapshot to set version.
+  - Added unit test for IO helper roundtrip (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\session.rs`
+  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - No file system adapter yet (JSON value only).
+  - No version migration strategy.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 6: session history storage layer (filesystem adapter).
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01
