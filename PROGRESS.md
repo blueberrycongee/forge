@@ -124,3 +124,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce PermissionGate trait (allow/ask/deny) with minimal rule matching.
   - Define ToolLifecycle types (pending/running/completed/error) and events.
+
+## 2026-01-21 02:20:19 PermissionGate (Phase 2)
+
+- Date: 2026-01-21 02:20:19
+- Scope: Phase 2 permission gating primitives
+- Summary: Added minimal permission policy with ordered rule matching and wildcard support.
+- Changes:
+  - Added `PermissionDecision`, `PermissionRule`, and `PermissionPolicy` types.
+  - Implemented `PermissionGate` trait with default policy adapter.
+  - Implemented minimal wildcard matching (`*` and prefix `prefix*`).
+  - Added unit tests covering first-match order, wildcard prefix, and default allow (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\permission.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Matching only supports exact or prefix wildcard; no full glob/regex.
+  - Default decision is `Allow` when no rule matches (may be tightened later).
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Define ToolLifecycle types (pending/running/completed/error) and link to `Event`.
+  - Add a minimal tool execution facade to LoopNode to emit lifecycle events.
