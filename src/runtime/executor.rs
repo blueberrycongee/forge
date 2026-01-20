@@ -23,7 +23,8 @@ use crate::runtime::compaction::{
 };
 use crate::runtime::prune::{PrunePolicy, prune_tool_events};
 use crate::runtime::trace::{ExecutionTrace, TraceEvent};
-use crate::runtime::session::{SessionSnapshot, SessionMessage};
+use crate::runtime::message::{Message, MessageRole, Part};
+use crate::runtime::session::SessionSnapshot;
 use crate::runtime::node::{Node, NodeSpec};
 use crate::runtime::branch::{Branch, BranchSpec};
 use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
@@ -448,10 +449,11 @@ impl<S: GraphState> CompiledGraph<S> {
             }
             state = node.execute_stream(state, sink.clone()).await?;
             if let Some(snapshot) = &snapshot {
-                snapshot.lock().unwrap().messages.push(SessionMessage {
-                    role: "system".to_string(),
-                    content: format!("node:{}:executed", current_node),
+                let mut message = Message::new(MessageRole::System);
+                message.parts.push(Part::TextFinal {
+                    text: format!("node:{}:executed", current_node),
                 });
+                snapshot.lock().unwrap().push_message(&message);
             }
             if let Some(trace) = &trace {
                 trace

@@ -946,3 +946,25 @@ un and into_node methods.
 - Next steps:
   - Wire snapshot replay into executor/session restore paths.
   - Extend conversion to include tool results/attachments when needed.
+
+## 2026-01-21 05:46:36 Snapshot Message Filtering (Phase 5)
+
+- Date: 2026-01-21 05:46:36
+- Scope: Phase 5 snapshot message hygiene + executor usage
+- Summary: Skip empty snapshot entries and standardize executor snapshot writes through Message/Part conversion.
+- Changes:
+  - `SessionSnapshot::push_message` now ignores messages without text content.
+  - `stream_events` builds a structured `Message` and uses snapshot conversion helpers.
+  - Added TDD coverage for skipping empty snapshot messages.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Snapshot still only stores flattened text; tool outputs/attachments are not preserved.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Wire snapshot replay (`SessionSnapshot::to_messages`) into restore paths.
+  - Extend snapshot conversion to include tool results/attachments when needed.

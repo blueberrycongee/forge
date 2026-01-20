@@ -63,7 +63,10 @@ impl SessionSnapshot {
     }
 
     pub fn push_message(&mut self, message: &crate::runtime::message::Message) {
-        self.messages.push(SessionMessage::from_message(message));
+        let entry = SessionMessage::from_message(message);
+        if !entry.content.is_empty() {
+            self.messages.push(entry);
+        }
     }
 
     pub fn to_messages(&self) -> Vec<crate::runtime::message::Message> {
@@ -288,5 +291,20 @@ mod tests {
                 text: "hi".to_string()
             }]
         );
+    }
+
+    #[test]
+    fn session_snapshot_push_message_skips_empty_content() {
+        let mut message = Message::new(MessageRole::Tool);
+        message.parts.push(Part::ToolResult {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            output: ToolOutput::text("ok"),
+        });
+
+        let mut snapshot = SessionSnapshot::new("s1");
+        snapshot.push_message(&message);
+
+        assert!(snapshot.messages.is_empty());
     }
 }
