@@ -1008,3 +1008,27 @@ un and into_node methods.
 - Next steps:
   - Use `with_snapshot_messages` when restoring sessions in loop/session manager.
   - Extend snapshot conversion to include tool results/attachments when needed.
+
+## 2026-01-21 05:53:37 SessionState Skeleton (Phase 5)
+
+- Date: 2026-01-21 05:53:37
+- Scope: Phase 5 session state core model
+- Summary: Added a minimal SessionState model with routing and tool-call tracking.
+- Changes:
+  - Added `SessionState`, `SessionRouting`, `ToolCallRecord`, and `ToolCallStatus`.
+  - Added helpers for routing transitions, step advance, and tool call updates.
+  - Exported session state types via runtime module prelude.
+  - Added TDD coverage for initialization, routing transitions, and tool call tracking.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - SessionState is not wired into LoopNode or executor yet.
+  - Tool call records do not track payloads or timestamps yet.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate SessionState into LoopNode/loop execution flow.
+  - Add message/part merge helpers for pending_parts and finalized messages.

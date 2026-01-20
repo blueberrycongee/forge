@@ -82,6 +82,7 @@ pub mod prune;
 pub mod tool;
 pub mod trace;
 pub mod session;
+pub mod session_state;
 pub mod r#loop;
 
 // Evaluation modules
@@ -105,6 +106,12 @@ pub mod prelude {
     pub use crate::runtime::prune::{PrunePolicy, PruneResult};
     pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
     pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
+    pub use crate::runtime::session_state::{
+        SessionRouting,
+        SessionState,
+        ToolCallRecord,
+        ToolCallStatus,
+    };
     pub use crate::runtime::permission::{
         PermissionDecision,
         PermissionGate,
