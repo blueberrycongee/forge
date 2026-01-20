@@ -75,3 +75,31 @@ This log records atomic development progress for Forge. Each entry must be detai
   - Define `Event` serialization format (serde + JSON schema).
   - Add `LoopNode` skeleton for OpenCode-style streaming loop.
   - Introduce PermissionGate + ToolLifecycle interfaces.
+
+---
+
+## Note — Timestamp Policy (effective 2026-01-21 02:12:01)
+
+- From this point forward, all PROGRESS entries must use the local machine time with second-level precision.
+- Prior entries remain unchanged by request.
+
+## 2026-01-21 02:13:51 — LoopNode Skeleton (Phase 2)
+
+- Date: 2026-01-21 02:13:51
+- Scope: Phase 2 LoopNode skeleton (OpenCode-style loop abstraction)
+- Summary: Added LoopNode with event-emitting handler and tests; integrated into module exports.
+- Changes:
+  - Added LoopNode abstraction with un and into_node methods.
+  - Added loop_node_emits_events test (TDD) to verify event emission and state update.
+  - Exported LoopNode in module prelude (module name escaped as #loop).
+- Files touched:
+  - D:\Desktop\opencode\forge\loop.rs
+  - D:\Desktop\opencode\forge\mod.rs
+- Known gaps / simplifications:
+  - LoopNode is a thin wrapper around a stream-capable handler (no actual LLM/tool loop yet).
+  - No structured loop state (session/message IDs, tool lifecycle) at this stage.
+- Validation:
+  - C:\Users\10758\.cargo\bin\cargo.exe test
+- Next steps:
+  - Define minimal LoopState structure for session/message metadata.
+  - Introduce PermissionGate and ToolLifecycle traits for LoopNode integration.
