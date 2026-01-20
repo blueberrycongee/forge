@@ -28,6 +28,17 @@ impl SessionMessage {
             content,
         }
     }
+
+    pub fn to_message(&self) -> Option<crate::runtime::message::Message> {
+        let role = crate::runtime::message::MessageRole::from_str(&self.role)?;
+        let mut message = crate::runtime::message::Message::new(role);
+        if !self.content.is_empty() {
+            message.parts.push(crate::runtime::message::Part::TextFinal {
+                text: self.content.clone(),
+            });
+        }
+        Some(message)
+    }
 }
 
 /// Session snapshot containing messages, trace, and compaction summaries.
@@ -53,6 +64,13 @@ impl SessionSnapshot {
 
     pub fn push_message(&mut self, message: &crate::runtime::message::Message) {
         self.messages.push(SessionMessage::from_message(message));
+    }
+
+    pub fn to_messages(&self) -> Vec<crate::runtime::message::Message> {
+        self.messages
+            .iter()
+            .filter_map(SessionMessage::to_message)
+            .collect()
     }
 }
 
@@ -113,7 +131,7 @@ mod tests {
     use super::{SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
     use crate::runtime::compaction::CompactionResult;
     use crate::runtime::message::{Message, MessageRole, Part};
-    use crate::runtime::trace::TraceEvent;
+    use crate::runtime::trace::{ExecutionTrace, TraceEvent};
     use crate::runtime::tool::ToolOutput;
 
     #[test]
@@ -209,6 +227,65 @@ mod tests {
             vec![SessionMessage {
                 role: "user".to_string(),
                 content: "hi".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn session_message_to_message_builds_text_final_parts() {
+        let session_message = SessionMessage {
+            role: "assistant".to_string(),
+            content: "hello".to_string(),
+        };
+
+        let message = session_message.to_message().expect("message");
+        assert_eq!(message.role, MessageRole::Assistant);
+        assert_eq!(
+            message.parts,
+            vec![Part::TextFinal {
+                text: "hello".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn session_message_to_message_skips_empty_content() {
+        let session_message = SessionMessage {
+            role: "user".to_string(),
+            content: "".to_string(),
+        };
+
+        let message = session_message.to_message().expect("message");
+        assert_eq!(message.role, MessageRole::User);
+        assert!(message.parts.is_empty());
+    }
+
+    #[test]
+    fn session_snapshot_to_messages_filters_unknown_roles() {
+        let snapshot = SessionSnapshot {
+            version: 1,
+            session_id: "s1".to_string(),
+            messages: vec![
+                SessionMessage {
+                    role: "user".to_string(),
+                    content: "hi".to_string(),
+                },
+                SessionMessage {
+                    role: "weird".to_string(),
+                    content: "skip".to_string(),
+                },
+            ],
+            trace: ExecutionTrace::new(),
+            compactions: Vec::new(),
+        };
+
+        let messages = snapshot.to_messages();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, MessageRole::User);
+        assert_eq!(
+            messages[0].parts,
+            vec![Part::TextFinal {
+                text: "hi".to_string()
             }]
         );
     }

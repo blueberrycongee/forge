@@ -924,3 +924,25 @@ un and into_node methods.
 - Next steps:
   - Use `SessionSnapshot::push_message` (or a richer mapping) in executor/session capture.
   - Extend conversion to include tool results or structured parts if needed.
+
+## 2026-01-21 05:40:25 Snapshot Replay Helpers (Phase 5)
+
+- Date: 2026-01-21 05:40:25
+- Scope: Phase 5 snapshot replay helpers for structured messages
+- Summary: Added reverse conversion from snapshot messages back to structured Message/Part.
+- Changes:
+  - Added `MessageRole::from_str` for role parsing (case-insensitive).
+  - Added `SessionMessage::to_message` and `SessionSnapshot::to_messages` helpers.
+  - Added TDD coverage for role parsing, empty content handling, and unknown role filtering.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Snapshot replay only restores text content (non-text parts remain unsupported).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Wire snapshot replay into executor/session restore paths.
+  - Extend conversion to include tool results/attachments when needed.

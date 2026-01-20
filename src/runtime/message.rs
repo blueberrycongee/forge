@@ -22,6 +22,16 @@ impl MessageRole {
             MessageRole::Tool => "tool",
         }
     }
+
+    pub fn from_str(input: &str) -> Option<Self> {
+        match input.to_ascii_lowercase().as_str() {
+            "system" => Some(MessageRole::System),
+            "user" => Some(MessageRole::User),
+            "assistant" => Some(MessageRole::Assistant),
+            "tool" => Some(MessageRole::Tool),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -215,5 +225,18 @@ mod tests {
         };
 
         assert_eq!(Part::from_event(&event), None);
+    }
+
+    #[test]
+    fn message_role_from_str_accepts_known_roles_case_insensitively() {
+        assert_eq!(MessageRole::from_str("system"), Some(MessageRole::System));
+        assert_eq!(MessageRole::from_str("USER"), Some(MessageRole::User));
+        assert_eq!(MessageRole::from_str("Assistant"), Some(MessageRole::Assistant));
+        assert_eq!(MessageRole::from_str("tool"), Some(MessageRole::Tool));
+    }
+
+    #[test]
+    fn message_role_from_str_rejects_unknown_roles() {
+        assert_eq!(MessageRole::from_str("unknown"), None);
     }
 }
