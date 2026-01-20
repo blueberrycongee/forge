@@ -498,3 +498,24 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Add prune policy + pruning implementation.
+
+## 2026-01-21 03:33:22 Phase 3 Round 4 (Prune Policy)
+
+- Date: 2026-01-21 03:33:22
+- Scope: Phase 3 round 4 - pruning old tool events
+- Summary: Added prune policy and helper to remove old tool events.
+- Changes:
+  - Added `PrunePolicy`, `PruneResult`, and `prune_tool_events` helper.
+  - Implemented tool-event detection and retention of most recent N tool events.
+  - Added unit tests for pruning behavior and disabled policy (TDD).
+  - Exported prune types in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\prune.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Pruning operates on event lists, not on message/part history yet.
+  - No executor integration to apply pruning during runs.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate pruning into executor/loop (apply to stored event history).

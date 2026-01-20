@@ -77,6 +77,7 @@ pub mod channel;
 pub mod event;
 pub mod compaction;
 pub mod permission;
+pub mod prune;
 pub mod tool;
 pub mod r#loop;
 
@@ -97,6 +98,7 @@ pub mod prelude {
     pub use crate::langgraph::executor::CompiledGraph;
     pub use crate::langgraph::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
     pub use crate::langgraph::compaction::{CompactionPolicy, CompactionResult};
+    pub use crate::langgraph::prune::{PrunePolicy, PruneResult};
     pub use crate::langgraph::permission::{
         PermissionDecision,
         PermissionGate,
