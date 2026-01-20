@@ -816,6 +816,27 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Decide Phase 5 scope or pick optional follow-ups.
 
+## 2026-01-21 04:21:07 Repo Restructure (Standard Library Layout)
+
+- Date: 2026-01-21 04:21:07
+- Scope: Repository structure refactor
+- Summary: Reorganized Forge into standard Rust crate layout with archived legacy docs.
+- Changes:
+  - Moved core modules into `src/langgraph/` and updated `src/lib.rs`.
+  - Archived previous README to `docs/README-legacy.md`.
+  - Rewrote root `README.md` with concise project overview.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\lib.rs`
+  - `D:\Desktop\opencode\forge\src\langgraph\*.rs`
+  - `D:\Desktop\opencode\forge\docs\README-legacy.md`
+  - `D:\Desktop\opencode\forge\README.md`
+- Known gaps / simplifications:
+  - Older PROGRESS entries reference pre-move file paths.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add docs index and examples directory (optional).
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01
