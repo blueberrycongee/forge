@@ -140,3 +140,72 @@ impl<S: GraphState> StateUpdate<S> {
     }
 }
 
+/// LoopState holds session/message metadata for streaming loop execution.
+#[derive(Clone, Debug)]
+pub struct LoopState {
+    pub session_id: String,
+    pub message_id: String,
+    pub step: u64,
+    next: Option<String>,
+    complete: bool,
+}
+
+impl LoopState {
+    pub fn new(session_id: impl Into<String>, message_id: impl Into<String>) -> Self {
+        Self {
+            session_id: session_id.into(),
+            message_id: message_id.into(),
+            step: 0,
+            next: None,
+            complete: false,
+        }
+    }
+
+    pub fn advance_step(&mut self) {
+        self.step = self.step.saturating_add(1);
+    }
+}
+
+impl GraphState for LoopState {
+    fn get_next(&self) -> Option<&str> {
+        self.next.as_deref()
+    }
+
+    fn set_next(&mut self, next: Option<String>) {
+        self.next = next;
+    }
+
+    fn is_complete(&self) -> bool {
+        self.complete
+    }
+
+    fn mark_complete(&mut self) {
+        self.complete = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GraphState, LoopState};
+
+    #[test]
+    fn loop_state_tracks_session_and_routing() {
+        let mut state = LoopState::new("s1", "m1");
+
+        assert_eq!(state.session_id, "s1");
+        assert_eq!(state.message_id, "m1");
+        assert_eq!(state.step, 0);
+        assert_eq!(state.get_next(), None);
+        assert!(!state.is_complete());
+
+        state.set_next(Some("node-a".to_string()));
+        assert_eq!(state.get_next(), Some("node-a"));
+
+        state.advance_step();
+        assert_eq!(state.step, 1);
+
+        state.mark_complete();
+        assert!(state.is_complete());
+    }
+}
+

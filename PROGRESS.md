@@ -103,3 +103,24 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Define minimal LoopState structure for session/message metadata.
   - Introduce PermissionGate and ToolLifecycle traits for LoopNode integration.
+
+## 2026-01-21 02:16:24 LoopState Struct (Phase 2)
+
+- Date: 2026-01-21 02:16:24
+- Scope: Phase 2 LoopState foundation (session/message metadata)
+- Summary: Added a minimal LoopState with session/message identifiers, step counter, and routing/complete flags.
+- Changes:
+  - Introduced `LoopState` with `session_id`, `message_id`, `step`, `next`, and `complete`.
+  - Implemented `GraphState` for LoopState to support routing and completion semantics.
+  - Added `advance_step` helper for loop iteration tracking.
+  - Added `loop_state_tracks_session_and_routing` test (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\state.rs`
+- Known gaps / simplifications:
+  - LoopState does not yet model messages, tool calls, or structured parts.
+  - No persistence/serialization strategy for LoopState.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce PermissionGate trait (allow/ask/deny) with minimal rule matching.
+  - Define ToolLifecycle types (pending/running/completed/error) and events.
