@@ -239,9 +239,72 @@ impl ToolRegistry {
     }
 }
 
+/// Registry of common tool output schemas/metadata.
+#[derive(Clone, Debug, Default)]
+pub struct ToolSchemaRegistry {
+    schemas: HashMap<String, ToolMetadata>,
+}
+
+impl ToolSchemaRegistry {
+    pub fn new() -> Self {
+        Self {
+            schemas: HashMap::new(),
+        }
+    }
+
+    pub fn with_common_schemas() -> Self {
+        let mut registry = Self::new();
+        registry.register(
+            "read",
+            ToolMetadata::new()
+                .with_mime_type("text/plain")
+                .with_schema("tool.read.v1"),
+        );
+        registry.register(
+            "grep",
+            ToolMetadata::new()
+                .with_mime_type("application/json")
+                .with_schema("tool.grep.v1"),
+        );
+        registry.register(
+            "ls",
+            ToolMetadata::new()
+                .with_mime_type("application/json")
+                .with_schema("tool.ls.v1"),
+        );
+        registry
+    }
+
+    pub fn register(&mut self, tool: impl Into<String>, metadata: ToolMetadata) {
+        self.schemas.insert(tool.into(), metadata);
+    }
+
+    pub fn get(&self, tool: &str) -> Option<&ToolMetadata> {
+        self.schemas.get(tool)
+    }
+
+    pub fn annotate_output(&self, tool: &str, output: ToolOutput) -> ToolOutput {
+        if output.metadata.is_some() {
+            return output;
+        }
+        match self.schemas.get(tool) {
+            Some(metadata) => ToolOutput::with_metadata(output.content, metadata.clone()),
+            None => output,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ToolCall, ToolMetadata, ToolOutput, ToolRegistry, ToolRunner, ToolState};
+    use super::{
+        ToolCall,
+        ToolMetadata,
+        ToolOutput,
+        ToolRegistry,
+        ToolRunner,
+        ToolSchemaRegistry,
+        ToolState,
+    };
     use crate::langgraph::event::{Event, EventSink};
     use futures::executor::block_on;
     use std::sync::{Arc, Mutex};
@@ -354,5 +417,31 @@ mod tests {
         let output = ToolOutput::with_metadata(serde_json::json!({"ok": true}), metadata.clone());
 
         assert_eq!(output.metadata, Some(metadata));
+    }
+
+    #[test]
+    fn tool_schema_registry_has_common_entries() {
+        let registry = ToolSchemaRegistry::with_common_schemas();
+        assert!(registry.get("read").is_some());
+        assert!(registry.get("grep").is_some());
+        assert!(registry.get("ls").is_some());
+    }
+
+    #[test]
+    fn tool_schema_registry_annotates_missing_metadata() {
+        let registry = ToolSchemaRegistry::with_common_schemas();
+        let output = ToolOutput::text("hello");
+        let annotated = registry.annotate_output("read", output);
+        let metadata = annotated.metadata.expect("metadata");
+        assert_eq!(metadata.schema.as_deref(), Some("tool.read.v1"));
+        assert_eq!(metadata.mime_type.as_deref(), Some("text/plain"));
+    }
+
+    #[test]
+    fn tool_schema_registry_does_not_override_existing_metadata() {
+        let registry = ToolSchemaRegistry::with_common_schemas();
+        let output = ToolOutput::text("hello").with_schema("custom.schema");
+        let annotated = registry.annotate_output("read", output.clone());
+        assert_eq!(annotated.metadata, output.metadata);
     }
 }

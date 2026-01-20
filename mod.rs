@@ -103,7 +103,15 @@ pub mod prelude {
         PermissionRule,
         PermissionSession,
     };
-    pub use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry, ToolRunner, ToolState};
+    pub use crate::langgraph::tool::{
+        ToolCall,
+        ToolMetadata,
+        ToolOutput,
+        ToolRegistry,
+        ToolRunner,
+        ToolSchemaRegistry,
+        ToolState,
+    };
     pub use crate::langgraph::r#loop::{LoopContext, LoopNode};
 
     // Metrics and evaluation

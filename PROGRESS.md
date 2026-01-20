@@ -376,3 +376,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce ToolOutput schema registry for common tools (grep, read, ls).
   - Add persistence adapter trait (load/save by session id).
+
+## 2026-01-21 03:23:44 ToolOutput Schema Registry (Phase 2)
+
+- Date: 2026-01-21 03:23:44
+- Scope: Phase 2 ToolOutput schema registry
+- Summary: Added ToolSchemaRegistry with common tool schemas and output annotation helpers.
+- Changes:
+  - Added `ToolSchemaRegistry` with register/get and default common schemas.
+  - Added `annotate_output` to fill missing ToolOutput metadata.
+  - Added tests for default entries and annotation behavior (TDD).
+  - Exported ToolSchemaRegistry in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Schemas are string identifiers only; no formal validation layer yet.
+  - Common schemas are placeholders (read/grep/ls v1).
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add persistence adapter trait (load/save by session id).
+  - Introduce tool-specific output structs (ReadOutput, GrepOutput, LsOutput).
