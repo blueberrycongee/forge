@@ -5,7 +5,7 @@
 
 use std::fmt::Debug;
 
-use crate::langgraph::tool::ToolState;
+use crate::langgraph::tool::{ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
 #[derive(Clone, Debug, Default)]
@@ -41,7 +41,7 @@ pub enum Event {
     ToolResult {
         tool: String,
         call_id: String,
-        output: String,
+        output: ToolOutput,
     },
     ToolError {
         tool: String,

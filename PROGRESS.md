@@ -259,3 +259,28 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce structured ToolOutput (JSON) + optional metadata.
   - Add permission reply/resume flow (PermissionReplied + Interrupt handling).
+
+## 2026-01-21 02:48:02 Structured ToolOutput (Phase 2)
+
+- Date: 2026-01-21 02:48:02
+- Scope: Phase 2 structured tool output model
+- Summary: Added ToolOutput with JSON payload + optional metadata and propagated through tool execution flow.
+- Changes:
+  - Added `ToolOutput` (content + metadata) with helpers `new`/`with_metadata`/`text`.
+  - Updated ToolRunner/ToolRegistry to return ToolOutput instead of String.
+  - Updated ToolResult event payload to carry ToolOutput.
+  - Updated LoopContext tool integration tests to work with structured output (TDD).
+  - Exported ToolOutput in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\opencode\forge\event.rs`
+  - `D:\Desktop\opencode\forge\loop.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - ToolOutput metadata is unstructured JSON (no schema yet).
+  - ToolResult does not carry timestamps or token usage.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add permission reply/resume flow (PermissionReplied + Interrupt handling).
+  - Introduce ToolOutput schema/metadata helpers (typed fields).

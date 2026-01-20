@@ -5,7 +5,7 @@ use crate::langgraph::error::{GraphError, GraphResult};
 use crate::langgraph::permission::{PermissionDecision, PermissionGate, PermissionPolicy};
 use crate::langgraph::node::NodeSpec;
 use crate::langgraph::state::GraphState;
-use crate::langgraph::tool::{ToolCall, ToolRegistry};
+use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
 
 /// LoopContext bundles tool registry + event sink for loop handlers.
 #[derive(Clone)]
@@ -32,7 +32,7 @@ impl LoopContext {
         self.sink.emit(event);
     }
 
-    pub async fn run_tool(&self, call: ToolCall) -> GraphResult<String> {
+    pub async fn run_tool(&self, call: ToolCall) -> GraphResult<ToolOutput> {
         let permission = format!("tool:{}", call.tool);
         match self.gate.decide(&permission) {
             PermissionDecision::Allow => {
@@ -149,7 +149,7 @@ mod tests {
     use crate::langgraph::event::{Event, EventSink};
     use crate::langgraph::permission::{PermissionDecision, PermissionPolicy, PermissionRule};
     use crate::langgraph::state::GraphState;
-    use crate::langgraph::tool::{ToolCall, ToolRegistry};
+    use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
     use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
 
@@ -196,7 +196,7 @@ mod tests {
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
         registry.register("echo", Arc::new(|call| {
-            Box::pin(async move { Ok(format!("ok:{}", call.tool)) })
+            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);
 
@@ -204,7 +204,8 @@ mod tests {
             let output = ctx
                 .run_tool(ToolCall::new("echo", "call-1", serde_json::json!({"msg": "hi"})))
                 .await?;
-            state.log.push(output);
+            let text = output.content.as_str().unwrap_or_default().to_string();
+            state.log.push(text);
             Ok(state)
         });
 
@@ -223,7 +224,7 @@ mod tests {
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
         registry.register("echo", Arc::new(|call| {
-            Box::pin(async move { Ok(format!("ok:{}", call.tool)) })
+            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);
         let gate = Arc::new(PermissionPolicy::new(vec![PermissionRule::new(

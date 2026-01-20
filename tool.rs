@@ -34,6 +34,33 @@ impl ToolCall {
     }
 }
 
+/// Structured tool output payload.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToolOutput {
+    pub content: serde_json::Value,
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl ToolOutput {
+    pub fn new(content: serde_json::Value) -> Self {
+        Self {
+            content,
+            metadata: None,
+        }
+    }
+
+    pub fn with_metadata(content: serde_json::Value, metadata: serde_json::Value) -> Self {
+        Self {
+            content,
+            metadata: Some(metadata),
+        }
+    }
+
+    pub fn text(text: impl Into<String>) -> Self {
+        Self::new(serde_json::Value::String(text.into()))
+    }
+}
+
 /// Tool execution facade that emits lifecycle events.
 pub struct ToolRunner;
 
@@ -42,10 +69,10 @@ impl ToolRunner {
         call: ToolCall,
         sink: Arc<dyn EventSink>,
         run: F,
-    ) -> GraphResult<String>
+    ) -> GraphResult<ToolOutput>
     where
         F: FnOnce(ToolCall) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = GraphResult<String>> + Send + 'static,
+        Fut: std::future::Future<Output = GraphResult<ToolOutput>> + Send + 'static,
     {
         let tool = call.tool.clone();
         let call_id = call.call_id.clone();
@@ -102,7 +129,7 @@ impl ToolRunner {
 
 /// Tool handler signature for registry execution.
 pub type ToolHandler =
-    Arc<dyn Fn(ToolCall) -> crate::langgraph::node::BoxFuture<'static, GraphResult<String>> + Send + Sync>;
+    Arc<dyn Fn(ToolCall) -> crate::langgraph::node::BoxFuture<'static, GraphResult<ToolOutput>> + Send + Sync>;
 
 /// Minimal tool registry for dispatching by name.
 #[derive(Default)]
@@ -129,7 +156,7 @@ impl ToolRegistry {
         &self,
         call: ToolCall,
         sink: Arc<dyn EventSink>,
-    ) -> GraphResult<String> {
+    ) -> GraphResult<ToolOutput> {
         let handler = self.tools.get(&call.tool).cloned().ok_or_else(|| {
             GraphError::ExecutionError {
                 node: format!("tool:{}", call.tool),
@@ -143,7 +170,7 @@ impl ToolRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::{ToolCall, ToolRegistry, ToolRunner, ToolState};
+    use super::{ToolCall, ToolOutput, ToolRegistry, ToolRunner, ToolState};
     use crate::langgraph::event::{Event, EventSink};
     use futures::executor::block_on;
     use std::sync::{Arc, Mutex};
@@ -171,11 +198,11 @@ mod tests {
 
         let call = ToolCall::new("grep", "call-1", serde_json::json!({"q": "hi"}));
         let result = block_on(ToolRunner::run_with_events(call, sink, |call| async move {
-            Ok(format!("ok:{}", call.tool))
+            Ok(ToolOutput::text(format!("ok:{}", call.tool)))
         }))
         .expect("tool run");
 
-        assert_eq!(result, "ok:grep");
+        assert_eq!(result.content, serde_json::Value::String("ok:grep".to_string()));
         let kinds: Vec<&'static str> = events
             .lock()
             .unwrap()
@@ -207,13 +234,13 @@ mod tests {
         let mut registry = ToolRegistry::new();
 
         registry.register("echo", Arc::new(|call| {
-            Box::pin(async move { Ok(format!("echo:{}", call.tool)) })
+            Box::pin(async move { Ok(ToolOutput::text(format!("echo:{}", call.tool))) })
         }));
 
         let call = ToolCall::new("echo", "call-2", serde_json::json!({"msg": "hi"}));
         let result = block_on(registry.run_with_events(call, sink)).expect("registry run");
 
-        assert_eq!(result, "echo:echo");
+        assert_eq!(result.content, serde_json::Value::String("echo:echo".to_string()));
         assert!(events
             .lock()
             .unwrap()

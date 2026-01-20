@@ -96,7 +96,7 @@ pub mod prelude {
     pub use crate::langgraph::executor::CompiledGraph;
     pub use crate::langgraph::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
     pub use crate::langgraph::permission::{PermissionDecision, PermissionGate, PermissionPolicy, PermissionRule};
-    pub use crate::langgraph::tool::{ToolCall, ToolRegistry, ToolRunner, ToolState};
+    pub use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry, ToolRunner, ToolState};
     pub use crate::langgraph::r#loop::{LoopContext, LoopNode};
 
     // Metrics and evaluation
