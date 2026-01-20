@@ -5,6 +5,8 @@
 
 use std::fmt::Debug;
 
+use crate::langgraph::tool::ToolState;
+
 /// Token usage breakdown (input/output/reasoning/cache).
 #[derive(Clone, Debug, Default)]
 pub struct TokenUsage {
@@ -46,6 +48,11 @@ pub enum Event {
         call_id: String,
         error: String,
     },
+    ToolStatus {
+        tool: String,
+        call_id: String,
+        state: ToolState,
+    },
     StepStart {
         session_id: String,
     },
@@ -62,6 +69,26 @@ pub enum Event {
         permission: String,
         reply: PermissionReply,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Event;
+    use crate::langgraph::tool::ToolState;
+
+    #[test]
+    fn tool_status_event_can_be_emitted() {
+        let event = Event::ToolStatus {
+            tool: "grep".to_string(),
+            call_id: "call-1".to_string(),
+            state: ToolState::Running,
+        };
+
+        match event {
+            Event::ToolStatus { state, .. } => assert_eq!(state, ToolState::Running),
+            _ => panic!("expected tool status event"),
+        }
+    }
 }
 
 /// Event sink for streaming runtime events to UI/CLI/SSE/etc.

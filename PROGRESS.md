@@ -146,3 +146,26 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Define ToolLifecycle types (pending/running/completed/error) and link to `Event`.
   - Add a minimal tool execution facade to LoopNode to emit lifecycle events.
+
+## 2026-01-21 02:24:39 ToolLifecycle Types (Phase 2)
+
+- Date: 2026-01-21 02:24:39
+- Scope: Phase 2 tool lifecycle primitives
+- Summary: Added minimal ToolLifecycle state types and linked lifecycle to Event stream.
+- Changes:
+  - Added `ToolState` enum with pending/running/completed/error.
+  - Added `Event::ToolStatus` variant to emit lifecycle transitions.
+  - Exported `ToolState` via module prelude.
+  - Added unit tests for ToolState and ToolStatus event (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\opencode\forge\event.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - No structured tool call input/output model yet (only state).
+  - ToolStatus does not carry timestamps or payloads.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add a minimal tool execution facade to LoopNode that emits ToolStatus.
+  - Define ToolCall input/output structures for richer lifecycle events.
