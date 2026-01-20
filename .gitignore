@@ -12,3 +12,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Docs
+/doc/
+/docs/

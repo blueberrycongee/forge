@@ -1,3 +1,40 @@
+# Forge Legacy Notes (Archived)
+
+> This document preserves historical notes from the earlier langgraph-rust
+> prototype. It is archived and may be outdated. For current docs, see
+> `README.md`.
+
+## Status
+
+- Archived; not maintained
+- Examples may reference legacy module names such as `langgraph`
+
+## Audience
+
+- Contributors who need historical context
+- Migration reference for prior codebases
+
+## Getting Started (Current)
+
+- Read `README.md` for the current API overview and quickstart
+
+## Documentation Map
+
+- `README.md` - current overview (EN/ZH)
+- `PROGRESS.md` - development log
+- `OPENCODE_RUNTIME_PLAN.md` - roadmap notes
+- `docs/OPENCODE_ANALYSIS.md` - architecture analysis
+
+## Contributing
+
+- Issues and PRs are welcome. Please include context and reproducible steps.
+
+## License
+
+- MIT. See `LICENSE`.
+
+## Legacy Reference (Unmaintained)
+
 # LangGraph Rust 框架文档
 
 > 基于 LangGraph 官方设计理念的 Rust 实现，用于构建有状态的多智能体应用。

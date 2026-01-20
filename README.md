@@ -1,15 +1,26 @@
-﻿# Forge
+# Forge
+
+Language: English | [中文 README](README.zh.md)
 
 Forge is a Rust framework for building stateful, event-driven agent runtimes.
 It focuses on streaming execution, tool lifecycles, permissions, and audit-ready
 observability.
 
-## Status
+---
+
+## English
+
+### Overview
+
+Forge provides a graph-based runtime with streaming events, tool lifecycle
+tracking, permission gating, and session observability.
+
+### Status
 
 - Active development
-- Phase 1-4 complete (see PROGRESS)
+- Phase 1-4 complete (see `PROGRESS.md`)
 
-## Features
+### Features
 
 - State graph execution with async nodes
 - Streamed runtime events (text, tool, permissions, compaction)
@@ -20,7 +31,7 @@ observability.
 - Trace and replay for audit logging
 - Session snapshot export/import and filesystem store
 
-## Quickstart
+### Quickstart
 
 ```rust
 use forge::prelude::*;
@@ -50,32 +61,22 @@ assert_eq!(result.count, 1);
 # }
 ```
 
-## Repo Layout
+### Repository Layout
 
 - `src/lib.rs` - module root and prelude
-- `graph.rs` / `executor.rs` - graph construction and execution
+- `src/runtime/graph.rs` / `src/runtime/executor.rs` - graph construction + execution
 - `src/runtime/event.rs` - runtime event protocol
 - `src/runtime/loop.rs` - LoopNode runtime
 - `src/runtime/tool.rs` - tool lifecycle and registry
 - `src/runtime/permission.rs` - permissions and resume flow
-- `compaction.rs` / `prune.rs` - session control policies
+- `src/runtime/compaction.rs` / `src/runtime/prune.rs` - session control policies
 - `src/runtime/trace.rs` - trace/replay
 - `src/runtime/session.rs` - snapshots and storage
 
-## Docs
+### Links
 
-- `docs/README-legacy.md` - original long-form documentation
-- `PROGRESS.md` - development log with timestamps
-- `OPENCODE_RUNTIME_PLAN.md` - roadmap and mapping notes
+- [Chinese README](README.zh.md)
 
-## Development
-
-Run tests:
-
-```bash
-C:\Users\10758\.cargo\bin\cargo.exe test
-```
-
-## License
+### License
 
 MIT. See `LICENSE`.
