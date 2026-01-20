@@ -599,3 +599,24 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Integrate trace + snapshot emission in executor.
+
+## 2026-01-21 03:41:35 Phase 3 Round 9 (Trace Wiring)
+
+- Date: 2026-01-21 03:41:35
+- Scope: Phase 3 round 9 - trace wiring in executor
+- Summary: Wired trace collection into stream_events and added snapshot builder hook.
+- Changes:
+  - Added trace collector to ExecutionConfig and recorded NodeStart/NodeFinish events.
+  - Recorded Compacted events when compaction hook fires.
+  - Added build_snapshot helper on CompiledGraph.
+  - Added test verifying trace recording (TDD).
+  - Removed legacy ExecutionTrace struct from executor to use shared trace module.
+- Files touched:
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - Snapshot builder does not include messages or compaction list yet.
+  - Trace not connected to invoke/invoke_with_metrics paths.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Wire SessionSnapshot emission to include messages and compactions.
