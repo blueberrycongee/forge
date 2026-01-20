@@ -14,13 +14,14 @@ use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand}
 use crate::langgraph::state::GraphState;
 use crate::langgraph::graph::{StateGraph, Edge};
 use crate::langgraph::event::EventSink;
+use crate::langgraph::compaction::{CompactionHook, NoopCompactionHook, CompactionResult};
 use crate::langgraph::node::{Node, NodeSpec};
 use crate::langgraph::branch::{Branch, BranchSpec};
 use crate::langgraph::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
 use crate::langgraph::ablation::NodeOverride;
 
 /// Configuration for graph execution
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ExecutionConfig {
     /// Maximum number of iterations
     pub max_iterations: usize,
@@ -36,6 +37,8 @@ pub struct ExecutionConfig {
     pub config_id: String,
     /// Enable metrics collection
     pub collect_metrics: bool,
+    /// Compaction hook for streaming execution
+    pub compaction_hook: Arc<dyn CompactionHook>,
 }
 
 impl ExecutionConfig {
@@ -48,6 +51,7 @@ impl ExecutionConfig {
             node_overrides: HashMap::new(),
             config_id: "default".to_string(),
             collect_metrics: false,
+            compaction_hook: Arc::new(NoopCompactionHook),
         }
     }
 
@@ -61,6 +65,7 @@ impl ExecutionConfig {
             node_overrides: HashMap::new(),
             config_id: config_id.into(),
             collect_metrics: true,
+            compaction_hook: Arc::new(NoopCompactionHook),
         }
     }
 
@@ -90,9 +95,21 @@ impl ExecutionConfig {
         self
     }
 
+    /// Set compaction hook for streaming execution
+    pub fn with_compaction_hook(mut self, hook: Arc<dyn CompactionHook>) -> Self {
+        self.compaction_hook = hook;
+        self
+    }
+
     /// Check if a node is masked
     pub fn is_masked(&self, node: &str) -> bool {
         self.masked_nodes.contains(node)
+    }
+}
+
+impl Default for ExecutionConfig {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -337,6 +354,17 @@ impl<S: GraphState> CompiledGraph<S> {
                 .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
 
             state = node.execute_stream(state, sink.clone()).await?;
+
+            if let Some(summary) = self.config.compaction_hook.before_compaction(&[]) {
+                let result = CompactionResult::new(summary, 0);
+                self.config.compaction_hook.after_compaction(&result);
+                let session_id = resolve_session_id(&state);
+                sink.emit(crate::langgraph::event::Event::SessionCompacted {
+                    session_id,
+                    summary: result.summary,
+                    truncated_before: result.truncated_before,
+                });
+            }
 
             current_node = self.get_next_node(&current_node, &state)?;
         }
@@ -666,4 +694,65 @@ mod tests {
         assert_eq!(final_state.steps, vec!["stream".to_string()]);
         assert_eq!(events.lock().unwrap().len(), 1);
     }
+
+    #[derive(Debug)]
+    struct TestCompactionHook {
+        calls: Arc<Mutex<usize>>,
+    }
+
+    impl CompactionHook for TestCompactionHook {
+        fn before_compaction(&self, _messages: &[String]) -> Option<String> {
+            let mut calls = self.calls.lock().unwrap();
+            if *calls == 0 {
+                *calls += 1;
+                Some("summary".to_string())
+            } else {
+                *calls += 1;
+                None
+            }
+        }
+
+        fn after_compaction(&self, _result: &CompactionResult) {
+            let mut calls = self.calls.lock().unwrap();
+            *calls += 1;
+        }
+    }
+
+    #[test]
+    fn stream_events_emits_compaction_event() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
+        let hook_calls = Arc::new(Mutex::new(0));
+        let hook: Arc<dyn CompactionHook> = Arc::new(TestCompactionHook {
+            calls: hook_calls.clone(),
+        });
+
+        let mut graph = StateGraph::<StreamState>::new();
+        graph.add_stream_node("streamer", |state, _sink| async move { Ok(state) });
+        graph.add_edge(START, "streamer");
+        graph.add_edge("streamer", END);
+
+        let compiled = graph
+            .compile()
+            .expect("compile")
+            .with_config(ExecutionConfig::new().with_compaction_hook(hook));
+        let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
+
+        let captured = events.lock().unwrap();
+        assert!(captured
+            .iter()
+            .any(|event| matches!(event, Event::SessionCompacted { .. })));
+        assert_eq!(*hook_calls.lock().unwrap(), 2);
+    }
+}
+
+fn resolve_session_id<S: GraphState>(state: &S) -> String {
+    if let Some(value) = state.get("session_id") {
+        if let Some(id) = value.downcast_ref::<String>() {
+            return id.clone();
+        }
+    }
+    "unknown".to_string()
 }

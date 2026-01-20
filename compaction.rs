@@ -37,7 +37,7 @@ impl CompactionResult {
 }
 
 /// Hook to customize compaction behavior (pre/post).
-pub trait CompactionHook: Send + Sync {
+pub trait CompactionHook: Send + Sync + std::fmt::Debug {
     fn before_compaction(&self, _messages: &[String]) -> Option<String> {
         None
     }
@@ -46,6 +46,7 @@ pub trait CompactionHook: Send + Sync {
 }
 
 /// Default no-op compaction hook.
+#[derive(Debug)]
 pub struct NoopCompactionHook;
 
 impl CompactionHook for NoopCompactionHook {}

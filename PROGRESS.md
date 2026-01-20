@@ -478,3 +478,23 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Wire compaction hooks into executor/loop.
+
+## 2026-01-21 03:31:40 Phase 3 Round 3 (Compaction Hook Wiring)
+
+- Date: 2026-01-21 03:31:40
+- Scope: Phase 3 round 3 - hook wiring in executor stream_events
+- Summary: Wired compaction hook into stream_events and emit SessionCompacted events.
+- Changes:
+  - Added compaction hook to ExecutionConfig with setter.
+  - Invoked hook in stream_events and emitted SessionCompacted event.
+  - Added resolve_session_id helper (state.get("session_id") fallback).
+  - Added test asserting compaction event emission (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - Hook uses empty message list (no message extraction yet).
+  - Only stream_events path emits compaction events.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add prune policy + pruning implementation.
