@@ -640,3 +640,42 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Phase 3 closeout: document remaining optional items or mark complete.
+
+## 2026-01-21 03:51:12 Phase 4 Round 1 (Compaction Auto Trigger)
+
+- Date: 2026-01-21 03:51:12
+- Scope: Phase 4 round 1 - compaction auto trigger policy
+- Summary: Added compaction policy enforcement based on message counts with hook inputs.
+- Changes:
+  - Added compaction policy to ExecutionConfig with setter.
+  - stream_events now checks message count before triggering compaction hook.
+  - Hook now receives message content when snapshot is attached.
+  - Added helpers to resolve message count and collect messages.
+  - Updated compaction event test to use policy (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - Message count is derived from snapshot messages or event history length.
+  - Compaction still only fires in stream_events path.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 2: compaction prompt/summary slots via hook context object.
+
+## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
+
+- Date: 2026-01-21 03:47:01
+- Scope: Phase 3 closeout
+- Summary: Phase 3 core goals completed (compaction/prune + trace/replay + snapshot model).
+- Changes:
+  - Marked Phase 3 as complete.
+- Files touched:
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / optional follow-ups:
+  - Replace synthetic node messages with real conversation history.
+  - Wire trace/compaction/snapshot to invoke/invoke_with_metrics paths.
+  - Add richer snapshot contents (tool events, permissions).
+- Validation:
+  - N/A (status update only).
+- Next steps:
+  - Begin Phase 4 or select optional follow-up items.

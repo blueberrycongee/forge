@@ -14,7 +14,7 @@ use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand}
 use crate::langgraph::state::GraphState;
 use crate::langgraph::graph::{StateGraph, Edge};
 use crate::langgraph::event::{Event, EventSink};
-use crate::langgraph::compaction::{CompactionHook, NoopCompactionHook, CompactionResult};
+use crate::langgraph::compaction::{CompactionHook, CompactionPolicy, NoopCompactionHook, CompactionResult};
 use crate::langgraph::prune::{PrunePolicy, prune_tool_events};
 use crate::langgraph::trace::{ExecutionTrace, TraceEvent};
 use crate::langgraph::session::{SessionSnapshot, SessionMessage};
@@ -42,6 +42,8 @@ pub struct ExecutionConfig {
     pub collect_metrics: bool,
     /// Compaction hook for streaming execution
     pub compaction_hook: Arc<dyn CompactionHook>,
+    /// Compaction policy for auto-triggering
+    pub compaction_policy: CompactionPolicy,
     /// Prune policy for event history
     pub prune_policy: PrunePolicy,
     /// Optional event history buffer
@@ -63,6 +65,7 @@ impl ExecutionConfig {
             config_id: "default".to_string(),
             collect_metrics: false,
             compaction_hook: Arc::new(NoopCompactionHook),
+            compaction_policy: CompactionPolicy::default(),
             prune_policy: PrunePolicy::default(),
             event_history: None,
             trace: None,
@@ -81,6 +84,7 @@ impl ExecutionConfig {
             config_id: config_id.into(),
             collect_metrics: true,
             compaction_hook: Arc::new(NoopCompactionHook),
+            compaction_policy: CompactionPolicy::default(),
             prune_policy: PrunePolicy::default(),
             event_history: None,
             trace: None,
@@ -117,6 +121,12 @@ impl ExecutionConfig {
     /// Set compaction hook for streaming execution
     pub fn with_compaction_hook(mut self, hook: Arc<dyn CompactionHook>) -> Self {
         self.compaction_hook = hook;
+        self
+    }
+
+    /// Set compaction policy
+    pub fn with_compaction_policy(mut self, policy: CompactionPolicy) -> Self {
+        self.compaction_policy = policy;
         self
     }
 
@@ -436,24 +446,28 @@ impl<S: GraphState> CompiledGraph<S> {
                     });
             }
 
-            if let Some(summary) = self.config.compaction_hook.before_compaction(&[]) {
-                let result = CompactionResult::new(summary, 0);
-                self.config.compaction_hook.after_compaction(&result);
-                let session_id = resolve_session_id(&state);
-                if let Some(trace) = &trace {
-                    trace.lock().unwrap().record_event(TraceEvent::Compacted {
-                        summary: result.summary.clone(),
+            let message_count = resolve_message_count(&snapshot, &history);
+            if self.config.compaction_policy.should_compact(message_count) {
+                let messages = collect_compaction_messages(&snapshot);
+                if let Some(summary) = self.config.compaction_hook.before_compaction(&messages) {
+                    let result = CompactionResult::new(summary, 0);
+                    self.config.compaction_hook.after_compaction(&result);
+                    let session_id = resolve_session_id(&state);
+                    if let Some(trace) = &trace {
+                        trace.lock().unwrap().record_event(TraceEvent::Compacted {
+                            summary: result.summary.clone(),
+                            truncated_before: result.truncated_before,
+                        });
+                    }
+                    if let Some(snapshot) = &snapshot {
+                        snapshot.lock().unwrap().compactions.push(result.clone());
+                    }
+                    sink.emit(crate::langgraph::event::Event::SessionCompacted {
+                        session_id,
+                        summary: result.summary,
                         truncated_before: result.truncated_before,
                     });
                 }
-                if let Some(snapshot) = &snapshot {
-                    snapshot.lock().unwrap().compactions.push(result.clone());
-                }
-                sink.emit(crate::langgraph::event::Event::SessionCompacted {
-                    session_id,
-                    summary: result.summary,
-                    truncated_before: result.truncated_before,
-                });
             }
 
             if use_history && self.config.prune_policy.enabled {
@@ -699,6 +713,33 @@ struct RecordingSink {
     history: Arc<std::sync::Mutex<Vec<Event>>>,
 }
 
+fn resolve_message_count(
+    snapshot: &Option<Arc<std::sync::Mutex<SessionSnapshot>>>,
+    history: &Arc<std::sync::Mutex<Vec<Event>>>,
+) -> usize {
+    if let Some(snapshot) = snapshot {
+        return snapshot.lock().unwrap().messages.len();
+    }
+    history.lock().unwrap().len()
+}
+
+fn collect_compaction_messages(
+    snapshot: &Option<Arc<std::sync::Mutex<SessionSnapshot>>>,
+) -> Vec<String> {
+    snapshot
+        .as_ref()
+        .map(|snapshot| {
+            snapshot
+                .lock()
+                .unwrap()
+                .messages
+                .iter()
+                .map(|message| message.content.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 impl RecordingSink {
     fn new(inner: Arc<dyn EventSink>, history: Arc<std::sync::Mutex<Vec<Event>>>) -> Self {
         Self { inner, history }
@@ -837,6 +878,7 @@ mod tests {
         let hook: Arc<dyn CompactionHook> = Arc::new(TestCompactionHook {
             calls: hook_calls.clone(),
         });
+        let snapshot = Arc::new(Mutex::new(SessionSnapshot::new("s1")));
 
         let mut graph = StateGraph::<StreamState>::new();
         graph.add_stream_node("streamer", |state, _sink| async move { Ok(state) });
@@ -846,7 +888,12 @@ mod tests {
         let compiled = graph
             .compile()
             .expect("compile")
-            .with_config(ExecutionConfig::new().with_compaction_hook(hook));
+            .with_config(
+                ExecutionConfig::new()
+                    .with_compaction_hook(hook)
+                    .with_compaction_policy(CompactionPolicy::new(0))
+                    .with_session_snapshot(Arc::clone(&snapshot)),
+            );
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         let captured = events.lock().unwrap();
