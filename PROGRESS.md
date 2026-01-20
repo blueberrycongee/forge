@@ -1032,3 +1032,23 @@ un and into_node methods.
 - Next steps:
   - Integrate SessionState into LoopNode/loop execution flow.
   - Add message/part merge helpers for pending_parts and finalized messages.
+
+## 2026-01-21 05:55:06 SessionState Part Merge (Phase 5)
+
+- Date: 2026-01-21 05:55:06
+- Scope: Phase 5 session state merge helpers
+- Summary: Added pending_parts merge/finalize helper on SessionState with TDD coverage.
+- Changes:
+  - Added `SessionState::finalize_message` to merge pending parts into a finalized Message.
+  - Added tests covering merge order, pending_parts clearing, and empty pending handling.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - finalize_message does not handle message_id updates or tool-call correlation yet.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate SessionState finalize flow into LoopNode/loop execution.
+  - Add helpers to append pending parts by event (TextDelta/ToolResult).

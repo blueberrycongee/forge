@@ -95,11 +95,22 @@ impl SessionState {
             false
         }
     }
+
+    pub fn finalize_message(&mut self, role: crate::runtime::message::MessageRole) -> Option<Message> {
+        if self.pending_parts.is_empty() {
+            return None;
+        }
+        let mut message = Message::new(role);
+        message.parts.extend(self.pending_parts.drain(..));
+        self.messages.push(message.clone());
+        Some(message)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{SessionRouting, SessionState, ToolCallStatus};
+    use crate::runtime::message::{MessageRole, Part};
 
     #[test]
     fn session_state_new_initializes_fields() {
@@ -145,5 +156,42 @@ mod tests {
         assert!(state.update_tool_call("c1", ToolCallStatus::Running));
         assert_eq!(state.tool_calls[0].status, ToolCallStatus::Running);
         assert!(!state.update_tool_call("missing", ToolCallStatus::Completed));
+    }
+
+    #[test]
+    fn session_state_finalize_message_merges_pending_parts_in_order() {
+        let mut state = SessionState::new("s1", "m1");
+        state.pending_parts.push(Part::TextDelta {
+            delta: "he".to_string(),
+        });
+        state.pending_parts.push(Part::TextFinal {
+            text: "llo".to_string(),
+        });
+
+        let message = state.finalize_message(MessageRole::Assistant).expect("message");
+
+        assert_eq!(message.role, MessageRole::Assistant);
+        assert_eq!(
+            message.parts,
+            vec![
+                Part::TextDelta {
+                    delta: "he".to_string()
+                },
+                Part::TextFinal {
+                    text: "llo".to_string()
+                }
+            ]
+        );
+        assert!(state.pending_parts.is_empty());
+        assert_eq!(state.messages.len(), 1);
+    }
+
+    #[test]
+    fn session_state_finalize_message_skips_when_no_pending_parts() {
+        let mut state = SessionState::new("s1", "m1");
+        let message = state.finalize_message(MessageRole::User);
+
+        assert!(message.is_none());
+        assert!(state.messages.is_empty());
     }
 }
