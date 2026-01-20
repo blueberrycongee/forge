@@ -988,3 +988,23 @@ un and into_node methods.
 - Next steps:
   - Use `SessionStore::load_messages` in session restore flows (loop/session manager).
   - Extend snapshot conversion to include tool results/attachments when needed.
+
+## 2026-01-21 05:51:01 ExecutionConfig Snapshot Seeding (Phase 5)
+
+- Date: 2026-01-21 05:51:01
+- Scope: Phase 5 snapshot restore wiring helper
+- Summary: Added ExecutionConfig helper to seed session snapshots from structured messages.
+- Changes:
+  - Added `ExecutionConfig::with_snapshot_messages` for snapshot seeding.
+  - Added TDD coverage for seeding behavior and empty-message filtering.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Snapshot still only stores flattened text; tool outputs/attachments are not preserved.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Use `with_snapshot_messages` when restoring sessions in loop/session manager.
+  - Extend snapshot conversion to include tool results/attachments when needed.

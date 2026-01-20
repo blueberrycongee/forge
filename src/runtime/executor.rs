@@ -174,6 +174,23 @@ impl ExecutionConfig {
         self
     }
 
+    /// Seed session snapshot with structured messages.
+    pub fn with_snapshot_messages<I>(
+        mut self,
+        session_id: impl Into<String>,
+        messages: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = Message>,
+    {
+        let mut snapshot = SessionSnapshot::new(session_id);
+        for message in messages {
+            snapshot.push_message(&message);
+        }
+        self.session_snapshot = Some(Arc::new(std::sync::Mutex::new(snapshot)));
+        self
+    }
+
     /// Check if a node is masked
     pub fn is_masked(&self, node: &str) -> bool {
         self.masked_nodes.contains(node)
@@ -815,6 +832,39 @@ mod tests {
         assert!(!config.is_masked("executor"));
         assert_eq!(config.config_id, "test_config");
         assert!(config.collect_metrics);
+    }
+
+    #[test]
+    fn execution_config_with_snapshot_messages_seeds_snapshot() {
+        let mut message = Message::new(MessageRole::User);
+        message.parts.push(Part::TextFinal {
+            text: "hi".to_string(),
+        });
+
+        let config = ExecutionConfig::new().with_snapshot_messages("s1", vec![message]);
+        let snapshot = config.session_snapshot.expect("snapshot");
+        let snapshot = snapshot.lock().unwrap();
+
+        assert_eq!(snapshot.session_id, "s1");
+        assert_eq!(snapshot.messages.len(), 1);
+        assert_eq!(snapshot.messages[0].role, "user");
+        assert_eq!(snapshot.messages[0].content, "hi");
+    }
+
+    #[test]
+    fn execution_config_with_snapshot_messages_skips_empty_entries() {
+        let mut message = Message::new(MessageRole::Tool);
+        message.parts.push(Part::ToolResult {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            output: crate::runtime::tool::ToolOutput::text("ok"),
+        });
+
+        let config = ExecutionConfig::new().with_snapshot_messages("s1", vec![message]);
+        let snapshot = config.session_snapshot.expect("snapshot");
+        let snapshot = snapshot.lock().unwrap();
+
+        assert!(snapshot.messages.is_empty());
     }
 
     #[test]
