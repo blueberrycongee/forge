@@ -1,4 +1,4 @@
-//! Constants for LangGraph
+﻿//! Constants for LangGraph
 //! 
 //! Defines special node markers and other constants.
 

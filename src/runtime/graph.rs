@@ -5,12 +5,12 @@
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 
-use crate::langgraph::constants::{START, END, is_reserved_name, has_reserved_chars};
-use crate::langgraph::error::{GraphError, GraphResult};
-use crate::langgraph::state::GraphState;
-use crate::langgraph::node::NodeSpec;
-use crate::langgraph::branch::{Branch, BranchSpec};
-use crate::langgraph::executor::CompiledGraph;
+use crate::runtime::constants::{START, END, is_reserved_name, has_reserved_chars};
+use crate::runtime::error::{GraphError, GraphResult};
+use crate::runtime::state::GraphState;
+use crate::runtime::node::NodeSpec;
+use crate::runtime::branch::{Branch, BranchSpec};
+use crate::runtime::executor::CompiledGraph;
 
 /// Edge type
 #[derive(Clone, Debug)]
@@ -27,9 +27,9 @@ pub enum Edge {
 /// 
 /// # Example
 /// ```rust,no_run
-/// use forge::langgraph::constants::START;
-/// use forge::langgraph::prelude::{GraphError, StateGraph, END};
-/// use forge::langgraph::state::GraphState;
+/// use forge::runtime::constants::START;
+/// use forge::runtime::prelude::{GraphError, StateGraph, END};
+/// use forge::runtime::state::GraphState;
 /// 
 /// #[derive(Clone, Default)]
 /// struct MyState {
@@ -98,8 +98,8 @@ impl<S: GraphState> StateGraph<S> {
     /// 
     /// # Example
     /// ```rust,no_run
-    /// use forge::langgraph::prelude::{GraphError, StateGraph};
-    /// use forge::langgraph::state::GraphState;
+    /// use forge::runtime::prelude::{GraphError, StateGraph};
+    /// use forge::runtime::state::GraphState;
     /// 
     /// #[derive(Clone, Default)]
     /// struct MyState;
@@ -136,7 +136,7 @@ impl<S: GraphState> StateGraph<S> {
     /// Add a stream-capable node to the graph
     pub fn add_stream_node<F, Fut>(&mut self, name: impl Into<String>, func: F) -> &mut Self
     where
-        F: Fn(S, std::sync::Arc<dyn crate::langgraph::event::EventSink>) -> Fut + Send + Sync + 'static,
+        F: Fn(S, std::sync::Arc<dyn crate::runtime::event::EventSink>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = GraphResult<S>> + Send + 'static,
     {
         let name = name.into();

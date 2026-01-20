@@ -1,4 +1,4 @@
-//! Compaction policy and result types.
+﻿//! Compaction policy and result types.
 
 /// Compaction trigger policy.
 #[derive(Clone, Debug, Default, PartialEq)]

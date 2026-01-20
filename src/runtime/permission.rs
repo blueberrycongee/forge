@@ -1,9 +1,9 @@
-//! Permission evaluation primitives for tool/operation gating.
+﻿//! Permission evaluation primitives for tool/operation gating.
 
 use serde::{Deserialize, Serialize};
 
-use crate::langgraph::error::ResumeCommand;
-use crate::langgraph::event::PermissionReply;
+use crate::runtime::error::ResumeCommand;
+use crate::runtime::event::PermissionReply;
 
 /// Permission decision outcome.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -79,15 +79,15 @@ impl PermissionOverrides {
         None
     }
 
-    fn apply_reply(&mut self, permission: &str, reply: crate::langgraph::event::PermissionReply) {
+    fn apply_reply(&mut self, permission: &str, reply: crate::runtime::event::PermissionReply) {
         match reply {
-            crate::langgraph::event::PermissionReply::Once => {
+            crate::runtime::event::PermissionReply::Once => {
                 self.once.insert(permission.to_string());
             }
-            crate::langgraph::event::PermissionReply::Always => {
+            crate::runtime::event::PermissionReply::Always => {
                 self.always.insert(permission.to_string());
             }
-            crate::langgraph::event::PermissionReply::Reject => {
+            crate::runtime::event::PermissionReply::Reject => {
                 self.reject.insert(permission.to_string());
             }
         }
@@ -124,7 +124,7 @@ impl PermissionSession {
         overrides.reject = snapshot.reject.into_iter().collect();
     }
 
-    pub fn apply_reply(&self, permission: &str, reply: crate::langgraph::event::PermissionReply) {
+    pub fn apply_reply(&self, permission: &str, reply: crate::runtime::event::PermissionReply) {
         let mut overrides = self.overrides.lock().unwrap();
         overrides.apply_reply(permission, reply);
     }
@@ -241,8 +241,8 @@ mod tests {
         PermissionStore,
         InMemoryPermissionStore,
     };
-    use crate::langgraph::error::ResumeCommand;
-    use crate::langgraph::event::PermissionReply;
+    use crate::runtime::error::ResumeCommand;
+    use crate::runtime::event::PermissionReply;
 
     #[test]
     fn permission_policy_uses_first_match() {

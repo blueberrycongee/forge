@@ -1,4 +1,4 @@
-//! Channels for state management
+﻿//! Channels for state management
 //! 
 //! Channels provide different strategies for aggregating state updates.
 //! This is an advanced feature for complex state management scenarios.

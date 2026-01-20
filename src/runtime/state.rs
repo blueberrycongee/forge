@@ -11,7 +11,7 @@ use std::any::Any;
 /// 
 /// # Example
 /// ```rust,no_run
-/// use forge::langgraph::state::GraphState;
+/// use forge::runtime::state::GraphState;
 /// 
 /// #[derive(Clone, Default)]
 /// struct MyState {

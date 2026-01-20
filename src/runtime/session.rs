@@ -1,9 +1,9 @@
-//! Session snapshot structures for export/import.
+﻿//! Session snapshot structures for export/import.
 
 use serde::{Deserialize, Serialize};
 
-use crate::langgraph::compaction::CompactionResult;
-use crate::langgraph::trace::ExecutionTrace;
+use crate::runtime::compaction::CompactionResult;
+use crate::runtime::trace::ExecutionTrace;
 
 /// Minimal message payload for snapshots.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -89,8 +89,8 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::{SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
-    use crate::langgraph::compaction::CompactionResult;
-    use crate::langgraph::trace::TraceEvent;
+    use crate::runtime::compaction::CompactionResult;
+    use crate::runtime::trace::TraceEvent;
 
     #[test]
     fn session_snapshot_roundtrip() {

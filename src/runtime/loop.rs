@@ -1,17 +1,17 @@
 ﻿use std::sync::Arc;
 
-use crate::langgraph::event::{Event, EventSink};
-use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
-use crate::langgraph::permission::{
+use crate::runtime::event::{Event, EventSink};
+use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
+use crate::runtime::permission::{
     PermissionDecision,
     PermissionGate,
     PermissionPolicy,
     PermissionRequest,
     PermissionSession,
 };
-use crate::langgraph::node::NodeSpec;
-use crate::langgraph::state::GraphState;
-use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
+use crate::runtime::node::NodeSpec;
+use crate::runtime::state::GraphState;
+use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
 
 /// LoopContext bundles tool registry + event sink for loop handlers.
 #[derive(Clone)]
@@ -45,7 +45,7 @@ impl LoopContext {
     pub fn reply_permission(
         &self,
         permission: impl Into<String>,
-        reply: crate::langgraph::event::PermissionReply,
+        reply: crate::runtime::event::PermissionReply,
     ) {
         let permission = permission.into();
         self.gate.apply_reply(&permission, reply.clone());
@@ -56,7 +56,7 @@ impl LoopContext {
         &self,
         permission: impl Into<String>,
         command: &ResumeCommand,
-    ) -> Option<crate::langgraph::event::PermissionReply> {
+    ) -> Option<crate::runtime::event::PermissionReply> {
         let permission = permission.into();
         let reply = self.gate.apply_resume(&permission, command)?;
         self.emit(Event::PermissionReplied {
@@ -104,7 +104,7 @@ pub struct LoopNode<S: GraphState> {
     tools: Arc<ToolRegistry>,
     gate: Arc<PermissionSession>,
     handler: Arc<
-        dyn Fn(S, LoopContext) -> crate::langgraph::node::BoxFuture<'static, GraphResult<S>>
+        dyn Fn(S, LoopContext) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>>
             + Send
             + Sync,
     >,
@@ -156,7 +156,7 @@ impl<S: GraphState> LoopNode<S> {
         &self.name
     }
 
-    pub fn run(&self, state: S, sink: Arc<dyn EventSink>) -> crate::langgraph::node::BoxFuture<'static, GraphResult<S>> {
+    pub fn run(&self, state: S, sink: Arc<dyn EventSink>) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
         let ctx = LoopContext::new_with_gate(
             sink,
             Arc::clone(&self.tools),
@@ -183,10 +183,10 @@ impl<S: GraphState> LoopNode<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::langgraph::event::{Event, EventSink};
-    use crate::langgraph::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
-    use crate::langgraph::state::GraphState;
-    use crate::langgraph::tool::{ToolCall, ToolOutput, ToolRegistry};
+    use crate::runtime::event::{Event, EventSink};
+    use crate::runtime::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
+    use crate::runtime::state::GraphState;
+    use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
     use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
 
@@ -315,7 +315,7 @@ mod tests {
             Arc::clone(&registry),
             gate,
             |state: LoopState, ctx| async move {
-                ctx.reply_permission("tool:echo", crate::langgraph::event::PermissionReply::Once);
+                ctx.reply_permission("tool:echo", crate::runtime::event::PermissionReply::Once);
                 ctx.run_tool(ToolCall::new("echo", "call-ok", serde_json::json!({})))
                     .await?;
                 Ok(state)

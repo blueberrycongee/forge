@@ -1,6 +1,6 @@
-//! Prune policy for trimming old tool events.
+﻿//! Prune policy for trimming old tool events.
 
-use crate::langgraph::event::Event;
+use crate::runtime::event::Event;
 
 /// Prune policy for tool events.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -92,8 +92,8 @@ impl<T> RetainWithIndex<T> for Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::{prune_tool_events, PrunePolicy};
-    use crate::langgraph::event::{Event, TokenUsage};
-    use crate::langgraph::tool::ToolOutput;
+    use crate::runtime::event::{Event, TokenUsage};
+    use crate::runtime::tool::ToolOutput;
 
     fn make_tool_start(call_id: &str) -> Event {
         Event::ToolStart {

@@ -23,7 +23,7 @@ observability.
 ## Quickstart
 
 ```rust
-use forge::langgraph::prelude::*;
+use forge::prelude::*;
 
 #[derive(Clone, Default)]
 struct State {
@@ -52,15 +52,15 @@ assert_eq!(result.count, 1);
 
 ## Repo Layout
 
-- `mod.rs` - module root and prelude
+- `src/lib.rs` - module root and prelude
 - `graph.rs` / `executor.rs` - graph construction and execution
-- `event.rs` - runtime event protocol
-- `loop.rs` - LoopNode runtime
-- `tool.rs` - tool lifecycle and registry
-- `permission.rs` - permissions and resume flow
+- `src/runtime/event.rs` - runtime event protocol
+- `src/runtime/loop.rs` - LoopNode runtime
+- `src/runtime/tool.rs` - tool lifecycle and registry
+- `src/runtime/permission.rs` - permissions and resume flow
 - `compaction.rs` / `prune.rs` - session control policies
-- `trace.rs` - trace/replay
-- `session.rs` - snapshots and storage
+- `src/runtime/trace.rs` - trace/replay
+- `src/runtime/session.rs` - snapshots and storage
 
 ## Docs
 

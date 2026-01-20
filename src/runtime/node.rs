@@ -1,4 +1,4 @@
-//! Node definitions for LangGraph
+﻿//! Node definitions for LangGraph
 //! 
 //! A node is a function that takes state and returns updated state.
 
@@ -6,9 +6,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::langgraph::error::GraphResult;
-use crate::langgraph::event::{EventSink, NoopEventSink};
-use crate::langgraph::state::GraphState;
+use crate::runtime::error::GraphResult;
+use crate::runtime::event::{EventSink, NoopEventSink};
+use crate::runtime::state::GraphState;
 
 /// A boxed future type for async node execution
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -160,6 +160,6 @@ impl<S: GraphState> Clone for NodeSpec<S> {
 #[macro_export]
 macro_rules! node {
     ($name:expr, $func:expr) => {
-        $crate::langgraph::node::NodeSpec::new($name, $func)
+        $crate::runtime::node::NodeSpec::new($name, $func)
     };
 }

@@ -1,11 +1,11 @@
-//! Tool lifecycle types for streaming execution.
+﻿//! Tool lifecycle types for streaming execution.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::langgraph::error::GraphResult;
-use crate::langgraph::event::{Event, EventSink};
-use crate::langgraph::error::GraphError;
+use crate::runtime::error::GraphResult;
+use crate::runtime::event::{Event, EventSink};
+use crate::runtime::error::GraphError;
 use serde::{Deserialize, Serialize};
 
 /// Tool lifecycle states for execution tracking.
@@ -200,7 +200,7 @@ impl ToolRunner {
 
 /// Tool handler signature for registry execution.
 pub type ToolHandler =
-    Arc<dyn Fn(ToolCall) -> crate::langgraph::node::BoxFuture<'static, GraphResult<ToolOutput>> + Send + Sync>;
+    Arc<dyn Fn(ToolCall) -> crate::runtime::node::BoxFuture<'static, GraphResult<ToolOutput>> + Send + Sync>;
 
 /// Minimal tool registry for dispatching by name.
 #[derive(Default)]
@@ -305,7 +305,7 @@ mod tests {
         ToolSchemaRegistry,
         ToolState,
     };
-    use crate::langgraph::event::{Event, EventSink};
+    use crate::runtime::event::{Event, EventSink};
     use futures::executor::block_on;
     use std::sync::{Arc, Mutex};
 

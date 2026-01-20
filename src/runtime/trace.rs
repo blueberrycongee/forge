@@ -1,4 +1,4 @@
-//! Trace data structures for runtime replay.
+﻿//! Trace data structures for runtime replay.
 
 use serde::{Deserialize, Serialize};
 
@@ -50,20 +50,20 @@ impl TraceReplay {
 
     pub fn replay_to_sink(
         trace: &ExecutionTrace,
-        sink: &dyn crate::langgraph::event::EventSink,
+        sink: &dyn crate::runtime::event::EventSink,
     ) {
         for event in &trace.events {
             let runtime_event = match event {
-                TraceEvent::NodeStart { node } => crate::langgraph::event::Event::StepStart {
+                TraceEvent::NodeStart { node } => crate::runtime::event::Event::StepStart {
                     session_id: node.clone(),
                 },
-                TraceEvent::NodeFinish { node } => crate::langgraph::event::Event::StepFinish {
+                TraceEvent::NodeFinish { node } => crate::runtime::event::Event::StepFinish {
                     session_id: node.clone(),
-                    tokens: crate::langgraph::event::TokenUsage::default(),
+                    tokens: crate::runtime::event::TokenUsage::default(),
                     cost: 0.0,
                 },
                 TraceEvent::Compacted { summary, truncated_before } => {
-                    crate::langgraph::event::Event::SessionCompacted {
+                    crate::runtime::event::Event::SessionCompacted {
                         session_id: "replay".to_string(),
                         summary: summary.clone(),
                         truncated_before: *truncated_before,
@@ -78,16 +78,16 @@ impl TraceReplay {
         let mut events = Vec::new();
         for event in &trace.events {
             let runtime_event = match event {
-                TraceEvent::NodeStart { node } => crate::langgraph::event::Event::StepStart {
+                TraceEvent::NodeStart { node } => crate::runtime::event::Event::StepStart {
                     session_id: node.clone(),
                 },
-                TraceEvent::NodeFinish { node } => crate::langgraph::event::Event::StepFinish {
+                TraceEvent::NodeFinish { node } => crate::runtime::event::Event::StepFinish {
                     session_id: node.clone(),
-                    tokens: crate::langgraph::event::TokenUsage::default(),
+                    tokens: crate::runtime::event::TokenUsage::default(),
                     cost: 0.0,
                 },
                 TraceEvent::Compacted { summary, truncated_before } => {
-                    crate::langgraph::event::Event::SessionCompacted {
+                    crate::runtime::event::Event::SessionCompacted {
                         session_id: "replay".to_string(),
                         summary: summary.clone(),
                         truncated_before: *truncated_before,
@@ -117,7 +117,7 @@ impl TraceReplay {
 #[cfg(test)]
 mod tests {
     use super::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
-    use crate::langgraph::event::{Event, EventSink};
+    use crate::runtime::event::{Event, EventSink};
     use std::sync::{Arc, Mutex};
 
     #[test]

@@ -1,4 +1,4 @@
-//! Metrics collection for graph execution
+﻿//! Metrics collection for graph execution
 //!
 //! Provides detailed metrics for each node and overall execution,
 //! enabling performance analysis and ablation studies.

@@ -1,6 +1,6 @@
-﻿//! LangGraph Rust Implementation
+﻿//! Forge Runtime
 //!
-//! A Rust port of the LangGraph framework for building stateful, multi-agent applications.
+//! A Rust runtime for building stateful, event-driven agent applications\.
 //!
 //! ## Features
 //!
@@ -13,9 +13,9 @@
 //!
 //! # Example
 //! ```rust,no_run
-//! use forge::langgraph::constants::START;
-//! use forge::langgraph::prelude::{GraphError, StateGraph, END};
-//! use forge::langgraph::state::GraphState;
+//! use forge::runtime::constants::START;
+//! use forge::runtime::prelude::{GraphError, StateGraph, END};
+//! use forge::runtime::state::GraphState;
 //!
 //! #[derive(Clone, Default)]
 //! struct MyState {
@@ -48,8 +48,8 @@
 //!
 //! # Ablation Study Example
 //! ```rust,no_run
-//! use forge::langgraph::ablation::{AblationConfig, AblationReport};
-//! use forge::langgraph::metrics::MetricsCollector;
+//! use forge::runtime::ablation::{AblationConfig, AblationReport};
+//! use forge::runtime::metrics::MetricsCollector;
 //!
 //! // Create ablation configs
 //! let configs = vec![
@@ -91,19 +91,19 @@ pub mod ablation;
 /// Prelude - commonly used types
 pub mod prelude {
     // Core types
-    pub use crate::langgraph::constants::END;
-    pub use crate::langgraph::error::GraphError;
+    pub use crate::runtime::constants::END;
+    pub use crate::runtime::error::GraphError;
     
     
     
-    pub use crate::langgraph::graph::StateGraph;
-    pub use crate::langgraph::executor::CompiledGraph;
-    pub use crate::langgraph::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
-    pub use crate::langgraph::compaction::{CompactionPolicy, CompactionResult};
-    pub use crate::langgraph::prune::{PrunePolicy, PruneResult};
-    pub use crate::langgraph::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
-    pub use crate::langgraph::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
-    pub use crate::langgraph::permission::{
+    pub use crate::runtime::graph::StateGraph;
+    pub use crate::runtime::executor::CompiledGraph;
+    pub use crate::runtime::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
+    pub use crate::runtime::compaction::{CompactionPolicy, CompactionResult};
+    pub use crate::runtime::prune::{PrunePolicy, PruneResult};
+    pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
+    pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
+    pub use crate::runtime::permission::{
         PermissionDecision,
         PermissionGate,
         PermissionPolicy,
@@ -114,7 +114,7 @@ pub mod prelude {
         PermissionStore,
         InMemoryPermissionStore,
     };
-    pub use crate::langgraph::tool::{
+    pub use crate::runtime::tool::{
         ToolCall,
         ToolMetadata,
         ToolOutput,
@@ -123,7 +123,7 @@ pub mod prelude {
         ToolSchemaRegistry,
         ToolState,
     };
-    pub use crate::langgraph::r#loop::{LoopContext, LoopNode};
+    pub use crate::runtime::r#loop::{LoopContext, LoopNode};
 
     // Metrics and evaluation
     

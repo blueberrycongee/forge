@@ -1,4 +1,4 @@
-//! Graph executor - runs the compiled graph
+﻿//! Graph executor - runs the compiled graph
 //!
 //! Supports:
 //! - Interrupt/resume for human-in-the-loop workflows
@@ -9,25 +9,25 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 
-use crate::langgraph::constants::{START, END, MAX_ITERATIONS};
-use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
-use crate::langgraph::state::GraphState;
-use crate::langgraph::graph::{StateGraph, Edge};
-use crate::langgraph::event::{Event, EventSink};
-use crate::langgraph::compaction::{
+use crate::runtime::constants::{START, END, MAX_ITERATIONS};
+use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
+use crate::runtime::state::GraphState;
+use crate::runtime::graph::{StateGraph, Edge};
+use crate::runtime::event::{Event, EventSink};
+use crate::runtime::compaction::{
     CompactionContext,
     CompactionHook,
     CompactionPolicy,
     NoopCompactionHook,
     CompactionResult,
 };
-use crate::langgraph::prune::{PrunePolicy, prune_tool_events};
-use crate::langgraph::trace::{ExecutionTrace, TraceEvent};
-use crate::langgraph::session::{SessionSnapshot, SessionMessage};
-use crate::langgraph::node::{Node, NodeSpec};
-use crate::langgraph::branch::{Branch, BranchSpec};
-use crate::langgraph::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
-use crate::langgraph::ablation::NodeOverride;
+use crate::runtime::prune::{PrunePolicy, prune_tool_events};
+use crate::runtime::trace::{ExecutionTrace, TraceEvent};
+use crate::runtime::session::{SessionSnapshot, SessionMessage};
+use crate::runtime::node::{Node, NodeSpec};
+use crate::runtime::branch::{Branch, BranchSpec};
+use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
+use crate::runtime::ablation::NodeOverride;
 
 /// Configuration for graph execution
 #[derive(Clone, Debug)]
@@ -484,7 +484,7 @@ impl<S: GraphState> CompiledGraph<S> {
                     if let Some(snapshot) = &snapshot {
                         snapshot.lock().unwrap().compactions.push(result.clone());
                     }
-                    sink.emit(crate::langgraph::event::Event::SessionCompacted {
+                    sink.emit(crate::runtime::event::Event::SessionCompacted {
                         session_id,
                         summary: result.summary,
                         truncated_before: result.truncated_before,
@@ -792,11 +792,11 @@ impl<S: GraphState> Clone for CompiledGraph<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::langgraph::constants::START;
-    use crate::langgraph::event::{Event, EventSink};
-    use crate::langgraph::graph::StateGraph;
-    use crate::langgraph::prune::PrunePolicy;
-    use crate::langgraph::state::GraphState;
+    use crate::runtime::constants::START;
+    use crate::runtime::event::{Event, EventSink};
+    use crate::runtime::graph::StateGraph;
+    use crate::runtime::prune::PrunePolicy;
+    use crate::runtime::state::GraphState;
     use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
 
@@ -949,7 +949,7 @@ mod tests {
             sink.emit(Event::ToolResult {
                 tool: "grep".to_string(),
                 call_id: "1".to_string(),
-                output: crate::langgraph::tool::ToolOutput::text("ok"),
+                output: crate::runtime::tool::ToolOutput::text("ok"),
             });
             Ok(state)
         });
@@ -997,7 +997,7 @@ mod tests {
             sink.emit(Event::ToolResult {
                 tool: "grep".to_string(),
                 call_id: "1".to_string(),
-                output: crate::langgraph::tool::ToolOutput::text("ok"),
+                output: crate::runtime::tool::ToolOutput::text("ok"),
             });
             Ok(state)
         });
@@ -1015,7 +1015,7 @@ mod tests {
             sink.emit(Event::ToolResult {
                 tool: "grep".to_string(),
                 call_id: "2".to_string(),
-                output: crate::langgraph::tool::ToolOutput::text("ok"),
+                output: crate::runtime::tool::ToolOutput::text("ok"),
             });
             Ok(state)
         });

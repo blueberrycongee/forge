@@ -1,11 +1,11 @@
-//! Event protocol for streaming execution.
+﻿//! Event protocol for streaming execution.
 //!
 //! This is the foundation for OpenCode-style runtime events
 //! (text/tool/step/permission) so clients can consume a single stream.
 
 use std::fmt::Debug;
 
-use crate::langgraph::tool::{ToolOutput, ToolState};
+use crate::runtime::tool::{ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -79,7 +79,7 @@ pub enum Event {
 #[cfg(test)]
 mod tests {
     use super::Event;
-    use crate::langgraph::tool::ToolState;
+    use crate::runtime::tool::ToolState;
 
     #[test]
     fn tool_status_event_can_be_emitted() {

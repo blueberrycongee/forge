@@ -147,8 +147,8 @@ pub type GraphResult<T> = Result<T, GraphError>;
 /// 
 /// # Example
 /// ```rust,no_run
-/// use forge::langgraph::error::{interrupt, GraphResult};
-/// use forge::langgraph::state::GraphState;
+/// use forge::runtime::error::{interrupt, GraphResult};
+/// use forge::runtime::state::GraphState;
 /// 
 /// #[derive(Clone, Default)]
 /// struct MyState {

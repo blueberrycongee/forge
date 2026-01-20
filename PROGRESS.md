@@ -89,9 +89,11 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Scope: Phase 2 LoopNode skeleton (OpenCode-style loop abstraction)
 - Summary: Added LoopNode with event-emitting handler and tests; integrated into module exports.
 - Changes:
-  - Added LoopNode abstraction with un and into_node methods.
+  - Added LoopNode abstraction with 
+un and into_node methods.
   - Added loop_node_emits_events test (TDD) to verify event emission and state update.
-  - Exported LoopNode in module prelude (module name escaped as #loop).
+  - Exported LoopNode in module prelude (module name escaped as 
+#loop).
 - Files touched:
   - D:\Desktop\opencode\forge\loop.rs
   - D:\Desktop\opencode\forge\mod.rs
@@ -822,12 +824,12 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Scope: Repository structure refactor
 - Summary: Reorganized Forge into standard Rust crate layout with archived legacy docs.
 - Changes:
-  - Moved core modules into `src/langgraph/` and updated `src/lib.rs`.
+  - Moved core modules into `src/runtime/` and updated `src/lib.rs`.
   - Archived previous README to `docs/README-legacy.md`.
   - Rewrote root `README.md` with concise project overview.
 - Files touched:
   - `D:\Desktop\opencode\forge\src\lib.rs`
-  - `D:\Desktop\opencode\forge\src\langgraph\*.rs`
+  - `D:\Desktop\opencode\forge\src\\runtime\*.rs`
   - `D:\Desktop\opencode\forge\docs\README-legacy.md`
   - `D:\Desktop\opencode\forge\README.md`
 - Known gaps / simplifications:
@@ -854,3 +856,24 @@ This log records atomic development progress for Forge. Each entry must be detai
   - N/A (status update only).
 - Next steps:
   - Begin Phase 4 or select optional follow-up items.
+
+## 2026-01-21 04:28:13 Runtime Module Rename (langgraph -> runtime)
+
+- Date: 2026-01-21 04:28:13
+- Scope: Repository module rename to align with Forge runtime naming
+- Summary: Renamed internal module path from `langgraph` to `runtime` and updated references.
+- Changes:
+  - Renamed `src/langgraph/` to `src/runtime/` and updated `src/lib.rs` exports.
+  - Replaced crate/module references to `langgraph` with `runtime` across code and docs.
+  - Updated README examples to use `forge::prelude::*` and `runtime` paths.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\lib.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\*.rs`
+  - `D:\Desktop\opencode\forge\README.md`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Archived docs may still reference legacy names (intentional).
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Run tests and commit the rename changes.

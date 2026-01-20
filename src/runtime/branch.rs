@@ -1,12 +1,12 @@
-//! Branch/conditional edge definitions for LangGraph
+﻿//! Branch/conditional edge definitions for LangGraph
 //! 
 //! Branches allow routing to different nodes based on state.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::langgraph::error::{GraphError, GraphResult};
-use crate::langgraph::state::GraphState;
+use crate::runtime::error::{GraphError, GraphResult};
+use crate::runtime::state::GraphState;
 
 /// Branch function signature - takes state (cloned) and returns the next node name
 /// 
@@ -130,7 +130,7 @@ impl<S: GraphState> Clone for BranchSpec<S> {
 /// Common routing patterns
 pub mod patterns {
     use super::*;
-    use crate::langgraph::constants::END;
+    use crate::runtime::constants::END;
     
     /// Route to END if a condition is true, otherwise to another node
     pub fn end_if<S, F>(condition: F, else_node: impl Into<String>) -> impl Fn(&S) -> String + Send + Sync + Clone + 'static
