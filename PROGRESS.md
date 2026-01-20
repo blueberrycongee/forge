@@ -701,6 +701,24 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 4: trace replay to sink / audit log export.
 
+## 2026-01-21 03:55:35 Phase 4 Round 4 (Trace Replay to Sink)
+
+- Date: 2026-01-21 03:55:35
+- Scope: Phase 4 round 4 - replay trace into runtime event sink
+- Summary: Added trace replay to emit runtime events for audit/logging.
+- Changes:
+  - Added `TraceReplay::replay_to_sink` mapping TraceEvent to runtime Event stream.
+  - Added unit test for replay emission (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\trace.rs`
+- Known gaps / simplifications:
+  - Replay uses synthetic session ids and default token usage.
+  - Mapping is minimal (NodeStart/Finish/Compacted only).
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 5: snapshot export/import IO + versioning.
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01

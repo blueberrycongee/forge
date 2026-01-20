@@ -47,11 +47,39 @@ impl TraceReplay {
     pub fn replay(trace: &ExecutionTrace) -> Vec<TraceEvent> {
         trace.events.clone()
     }
+
+    pub fn replay_to_sink(
+        trace: &ExecutionTrace,
+        sink: &dyn crate::langgraph::event::EventSink,
+    ) {
+        for event in &trace.events {
+            let runtime_event = match event {
+                TraceEvent::NodeStart { node } => crate::langgraph::event::Event::StepStart {
+                    session_id: node.clone(),
+                },
+                TraceEvent::NodeFinish { node } => crate::langgraph::event::Event::StepFinish {
+                    session_id: node.clone(),
+                    tokens: crate::langgraph::event::TokenUsage::default(),
+                    cost: 0.0,
+                },
+                TraceEvent::Compacted { summary, truncated_before } => {
+                    crate::langgraph::event::Event::SessionCompacted {
+                        session_id: "replay".to_string(),
+                        summary: summary.clone(),
+                        truncated_before: *truncated_before,
+                    }
+                }
+            };
+            sink.emit(runtime_event);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
+    use crate::langgraph::event::{Event, EventSink};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn trace_records_events_and_spans() {
@@ -92,5 +120,38 @@ mod tests {
         });
         let replayed = TraceReplay::replay(&trace);
         assert_eq!(replayed, trace.events);
+    }
+
+    struct CaptureSink {
+        events: Arc<Mutex<Vec<Event>>>,
+    }
+
+    impl EventSink for CaptureSink {
+        fn emit(&self, event: Event) {
+            self.events.lock().unwrap().push(event);
+        }
+    }
+
+    #[test]
+    fn trace_replay_emits_events() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        trace.record_event(TraceEvent::Compacted {
+            summary: "s".to_string(),
+            truncated_before: 1,
+        });
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = CaptureSink {
+            events: Arc::clone(&events),
+        };
+
+        TraceReplay::replay_to_sink(&trace, &sink);
+
+        let events = events.lock().unwrap();
+        assert!(events.iter().any(|event| matches!(event, Event::StepStart { .. })));
+        assert!(events.iter().any(|event| matches!(event, Event::SessionCompacted { .. })));
     }
 }
