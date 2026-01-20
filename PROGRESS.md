@@ -682,6 +682,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 3: unify prune/compaction scheduling.
 
+## 2026-01-21 03:54:18 Phase 4 Round 3 (Prune/Compaction Ordering)
+
+- Date: 2026-01-21 03:54:18
+- Scope: Phase 4 round 3 - prune/compaction scheduling
+- Summary: Added ordering control between prune and compaction in stream_events.
+- Changes:
+  - Added `prune_before_compaction` flag to ExecutionConfig.
+  - Applied pruning before or after compaction based on flag.
+  - Added unit test to verify prune-before-compaction ordering (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - Ordering only applies to stream_events path.
+  - Prune order does not yet affect compaction prompt content.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 4: trace replay to sink / audit log export.
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01

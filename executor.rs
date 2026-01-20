@@ -50,6 +50,8 @@ pub struct ExecutionConfig {
     pub compaction_hook: Arc<dyn CompactionHook>,
     /// Compaction policy for auto-triggering
     pub compaction_policy: CompactionPolicy,
+    /// Whether to run prune before compaction
+    pub prune_before_compaction: bool,
     /// Prune policy for event history
     pub prune_policy: PrunePolicy,
     /// Optional event history buffer
@@ -72,6 +74,7 @@ impl ExecutionConfig {
             collect_metrics: false,
             compaction_hook: Arc::new(NoopCompactionHook),
             compaction_policy: CompactionPolicy::default(),
+            prune_before_compaction: true,
             prune_policy: PrunePolicy::default(),
             event_history: None,
             trace: None,
@@ -91,6 +94,7 @@ impl ExecutionConfig {
             collect_metrics: true,
             compaction_hook: Arc::new(NoopCompactionHook),
             compaction_policy: CompactionPolicy::default(),
+            prune_before_compaction: true,
             prune_policy: PrunePolicy::default(),
             event_history: None,
             trace: None,
@@ -133,6 +137,12 @@ impl ExecutionConfig {
     /// Set compaction policy
     pub fn with_compaction_policy(mut self, policy: CompactionPolicy) -> Self {
         self.compaction_policy = policy;
+        self
+    }
+
+    /// Set prune ordering relative to compaction
+    pub fn with_prune_before_compaction(mut self, enabled: bool) -> Self {
+        self.prune_before_compaction = enabled;
         self
     }
 
@@ -452,6 +462,11 @@ impl<S: GraphState> CompiledGraph<S> {
                     });
             }
 
+            if use_history && self.config.prune_policy.enabled && self.config.prune_before_compaction {
+                let mut events = history.lock().unwrap();
+                prune_tool_events(&mut events, &self.config.prune_policy);
+            }
+
             let message_count = resolve_message_count(&snapshot, &history);
             if self.config.compaction_policy.should_compact(message_count) {
                 let messages = collect_compaction_messages(&snapshot);
@@ -477,7 +492,7 @@ impl<S: GraphState> CompiledGraph<S> {
                 }
             }
 
-            if use_history && self.config.prune_policy.enabled {
+            if use_history && self.config.prune_policy.enabled && !self.config.prune_before_compaction {
                 let mut events = history.lock().unwrap();
                 prune_tool_events(&mut events, &self.config.prune_policy);
             }
@@ -908,6 +923,60 @@ mod tests {
             .iter()
             .any(|event| matches!(event, Event::SessionCompacted { .. })));
         assert_eq!(*hook_calls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn prune_ordering_executes_before_compaction() {
+        let history = Arc::new(Mutex::new(Vec::new()));
+        let snapshot = Arc::new(Mutex::new(SessionSnapshot::new("s1")));
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
+        let hook_calls = Arc::new(Mutex::new(0));
+        let hook: Arc<dyn CompactionHook> = Arc::new(TestCompactionHook {
+            calls: hook_calls.clone(),
+        });
+
+        let mut graph = StateGraph::<StreamState>::new();
+        graph.add_stream_node("node", |state, sink| async move {
+            sink.emit(Event::ToolStart {
+                tool: "grep".to_string(),
+                call_id: "1".to_string(),
+                input: serde_json::json!({"q": "hi"}),
+            });
+            sink.emit(Event::ToolResult {
+                tool: "grep".to_string(),
+                call_id: "1".to_string(),
+                output: crate::langgraph::tool::ToolOutput::text("ok"),
+            });
+            Ok(state)
+        });
+        graph.add_edge(START, "node");
+        graph.add_edge("node", END);
+
+        let compiled = graph
+            .compile()
+            .expect("compile")
+            .with_config(
+                ExecutionConfig::new()
+                    .with_event_history(Arc::clone(&history))
+                    .with_prune_policy(PrunePolicy::new(0))
+                    .with_prune_before_compaction(true)
+                    .with_compaction_policy(CompactionPolicy::new(0))
+                    .with_compaction_hook(hook)
+                    .with_session_snapshot(Arc::clone(&snapshot)),
+            );
+
+        let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
+
+        let history = history.lock().unwrap();
+        assert!(history.iter().all(|event| !matches!(event, Event::ToolStart { .. })));
+        assert!(events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| matches!(event, Event::SessionCompacted { .. })));
     }
 
     #[test]
