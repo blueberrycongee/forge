@@ -398,3 +398,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Add persistence adapter trait (load/save by session id).
   - Introduce tool-specific output structs (ReadOutput, GrepOutput, LsOutput).
+
+## 2026-01-21 03:25:22 Permission Store Adapter (Phase 2)
+
+- Date: 2026-01-21 03:25:22
+- Scope: Phase 2 permission persistence adapter
+- Summary: Added PermissionStore trait and in-memory implementation for session snapshots.
+- Changes:
+  - Added `PermissionStore` trait with load/save by session id.
+  - Added `InMemoryPermissionStore` for tests/local use.
+  - Added tests for store roundtrip (TDD).
+  - Exported PermissionStore/InMemoryPermissionStore in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\permission.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - No filesystem or database adapter yet.
+  - Store is not wired into LoopContext by default.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce tool-specific output structs (ReadOutput, GrepOutput, LsOutput).
+  - Wire PermissionStore into a higher-level session manager (future).

@@ -175,6 +175,39 @@ pub struct PermissionSnapshot {
     pub reject: Vec<String>,
 }
 
+/// Persistence adapter for permission sessions.
+pub trait PermissionStore: Send + Sync {
+    fn load(&self, session_id: &str) -> Option<PermissionSnapshot>;
+    fn save(&self, session_id: &str, snapshot: PermissionSnapshot);
+}
+
+/// In-memory permission store for tests/local use.
+#[derive(Default)]
+pub struct InMemoryPermissionStore {
+    snapshots: std::sync::Mutex<std::collections::HashMap<String, PermissionSnapshot>>,
+}
+
+impl InMemoryPermissionStore {
+    pub fn new() -> Self {
+        Self {
+            snapshots: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+impl PermissionStore for InMemoryPermissionStore {
+    fn load(&self, session_id: &str) -> Option<PermissionSnapshot> {
+        self.snapshots.lock().unwrap().get(session_id).cloned()
+    }
+
+    fn save(&self, session_id: &str, snapshot: PermissionSnapshot) {
+        self.snapshots
+            .lock()
+            .unwrap()
+            .insert(session_id.to_string(), snapshot);
+    }
+}
+
 fn parse_permission_reply(value: &serde_json::Value) -> Option<PermissionReply> {
     match value {
         serde_json::Value::String(value) => parse_reply_str(value),
@@ -205,6 +238,8 @@ mod tests {
         PermissionRule,
         PermissionSession,
         PermissionSnapshot,
+        PermissionStore,
+        InMemoryPermissionStore,
     };
     use crate::langgraph::error::ResumeCommand;
     use crate::langgraph::event::PermissionReply;
@@ -330,5 +365,19 @@ mod tests {
         assert_eq!(restored.decide("tool:echo"), PermissionDecision::Allow);
         assert_eq!(restored.decide("tool:read"), PermissionDecision::Allow);
         assert_eq!(restored.decide("tool:rm"), PermissionDecision::Deny);
+    }
+
+    #[test]
+    fn permission_store_roundtrip() {
+        let store = InMemoryPermissionStore::new();
+        let snapshot = PermissionSnapshot {
+            once: vec!["tool:echo".to_string()],
+            always: vec!["tool:read".to_string()],
+            reject: vec!["tool:rm".to_string()],
+        };
+
+        assert!(store.load("s1").is_none());
+        store.save("s1", snapshot.clone());
+        assert_eq!(store.load("s1"), Some(snapshot));
     }
 }

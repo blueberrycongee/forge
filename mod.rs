@@ -102,6 +102,9 @@ pub mod prelude {
         PermissionRequest,
         PermissionRule,
         PermissionSession,
+        PermissionSnapshot,
+        PermissionStore,
+        InMemoryPermissionStore,
     };
     pub use crate::langgraph::tool::{
         ToolCall,
