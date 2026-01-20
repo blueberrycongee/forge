@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use crate::runtime::tool::{ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TokenUsage {
     pub input: u64,
     pub output: u64,

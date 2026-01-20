@@ -75,6 +75,7 @@ pub mod graph;
 pub mod executor;
 pub mod channel;
 pub mod event;
+pub mod message;
 pub mod compaction;
 pub mod permission;
 pub mod prune;
@@ -99,6 +100,7 @@ pub mod prelude {
     pub use crate::runtime::graph::StateGraph;
     pub use crate::runtime::executor::CompiledGraph;
     pub use crate::runtime::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
+    pub use crate::runtime::message::{Message, MessageRole, Part};
     pub use crate::runtime::compaction::{CompactionPolicy, CompactionResult};
     pub use crate::runtime::prune::{PrunePolicy, PruneResult};
     pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};

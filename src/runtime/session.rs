@@ -12,6 +12,24 @@ pub struct SessionMessage {
     pub content: String,
 }
 
+impl SessionMessage {
+    pub fn from_message(message: &crate::runtime::message::Message) -> Self {
+        let mut content = String::new();
+        for part in &message.parts {
+            match part {
+                crate::runtime::message::Part::TextDelta { delta } => content.push_str(delta),
+                crate::runtime::message::Part::TextFinal { text } => content.push_str(text),
+                _ => {}
+            }
+        }
+
+        Self {
+            role: message.role.as_str().to_string(),
+            content,
+        }
+    }
+}
+
 /// Session snapshot containing messages, trace, and compaction summaries.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionSnapshot {
@@ -31,6 +49,10 @@ impl SessionSnapshot {
             trace: ExecutionTrace::new(),
             compactions: Vec::new(),
         }
+    }
+
+    pub fn push_message(&mut self, message: &crate::runtime::message::Message) {
+        self.messages.push(SessionMessage::from_message(message));
     }
 }
 
@@ -90,7 +112,9 @@ impl SessionStore {
 mod tests {
     use super::{SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
     use crate::runtime::compaction::CompactionResult;
+    use crate::runtime::message::{Message, MessageRole, Part};
     use crate::runtime::trace::TraceEvent;
+    use crate::runtime::tool::ToolOutput;
 
     #[test]
     fn session_snapshot_roundtrip() {
@@ -126,5 +150,66 @@ mod tests {
         store.save(&snapshot).expect("save");
         let loaded = store.load("s1").expect("load");
         assert_eq!(snapshot, loaded);
+    }
+
+    #[test]
+    fn session_message_from_message_collects_text_parts_in_order() {
+        let mut message = Message::new(MessageRole::Assistant);
+        message.parts.push(Part::TextDelta {
+            delta: "he".to_string(),
+        });
+        message.parts.push(Part::ToolCall {
+            tool: "grep".to_string(),
+            call_id: "c1".to_string(),
+            input: serde_json::json!({ "q": "hi" }),
+        });
+        message.parts.push(Part::TextFinal {
+            text: "llo".to_string(),
+        });
+        message.parts.push(Part::TextDelta {
+            delta: "!".to_string(),
+        });
+
+        let session_message = SessionMessage::from_message(&message);
+        assert_eq!(session_message.role, "assistant");
+        assert_eq!(session_message.content, "hello!");
+    }
+
+    #[test]
+    fn session_message_from_message_ignores_non_text_parts() {
+        let mut message = Message::new(MessageRole::Tool);
+        message.parts.push(Part::ToolResult {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            output: ToolOutput::text("ok"),
+        });
+        message.parts.push(Part::Attachment {
+            name: "file.txt".to_string(),
+            mime_type: "text/plain".to_string(),
+            data: serde_json::json!({"size": 4}),
+        });
+
+        let session_message = SessionMessage::from_message(&message);
+        assert_eq!(session_message.role, "tool");
+        assert!(session_message.content.is_empty());
+    }
+
+    #[test]
+    fn session_snapshot_push_message_appends_converted_entry() {
+        let mut message = Message::new(MessageRole::User);
+        message.parts.push(Part::TextFinal {
+            text: "hi".to_string(),
+        });
+
+        let mut snapshot = SessionSnapshot::new("s1");
+        snapshot.push_message(&message);
+
+        assert_eq!(
+            snapshot.messages,
+            vec![SessionMessage {
+                role: "user".to_string(),
+                content: "hi".to_string(),
+            }]
+        );
     }
 }

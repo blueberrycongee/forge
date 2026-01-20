@@ -877,3 +877,50 @@ un and into_node methods.
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Run tests and commit the rename changes.
+
+## 2026-01-21 05:21:56 Message/Part Model (Phase 5)
+
+- Date: 2026-01-21 05:21:56
+- Scope: Phase 5 core message/part model for session runtime
+- Summary: Added structured Message/Part types with Event-to-Part mapping and tests.
+- Changes:
+  - Added `message.rs` with `MessageRole`, `Message`, and `Part` enums.
+  - Implemented `Part::from_event` mapping for TextDelta, ToolStart/Result/Error, and TokenUsage.
+  - Exported message types via runtime prelude.
+  - Added tests covering mapping behavior and default message initialization (TDD).
+  - Added `PartialEq` for `TokenUsage` to support comparisons.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+- Known gaps / simplifications:
+  - No integration with SessionSnapshot yet (still uses `SessionMessage`).
+  - WSL distro not installed, so WSL lint/CI not run yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Install/enable WSL distro and run `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` in WSL.
+  - Extend SessionSnapshot to use Message/Part or add conversion helpers.
+
+## 2026-01-21 05:36:07 SessionSnapshot Message Conversion (Phase 5)
+
+- Date: 2026-01-21 05:36:07
+- Scope: Phase 5 incremental bridge between Message/Part and SessionSnapshot
+- Summary: Added conversion helpers to map structured Message/Part into legacy snapshot messages.
+- Changes:
+  - Added `MessageRole::as_str` helper for stable role serialization.
+  - Added `SessionMessage::from_message` to flatten text parts into snapshot content.
+  - Added `SessionSnapshot::push_message` to append converted messages.
+  - Added TDD coverage for text-part ordering, non-text filtering, and snapshot append.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Non-text parts are ignored in snapshot conversion (tool outputs/attachments not serialized).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Use `SessionSnapshot::push_message` (or a richer mapping) in executor/session capture.
+  - Extend conversion to include tool results or structured parts if needed.
