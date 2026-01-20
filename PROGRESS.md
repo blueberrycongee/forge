@@ -213,3 +213,27 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce structured ToolOutput (JSON) + optional metadata.
   - Wire ToolRegistry into LoopNode to drive tool calls from the loop.
+
+## 2026-01-21 02:42:03 LoopNode Tool Integration (Phase 2)
+
+- Date: 2026-01-21 02:42:03
+- Scope: Phase 2 LoopNode + ToolRegistry integration
+- Summary: Wired ToolRegistry into LoopNode via LoopContext, enabling tool calls inside loop handlers.
+- Changes:
+  - Added `LoopContext` carrying `EventSink` + `ToolRegistry`.
+  - Updated LoopNode handler signature to accept LoopContext.
+  - Added `LoopNode::with_tools` constructor and default registry for `new`.
+  - Added `LoopContext::run_tool` to emit ToolStatus/ToolStart/ToolResult through registry.
+  - Added integration test `loop_node_runs_tools_via_registry` (TDD).
+  - Exported LoopContext in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\loop.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - LoopContext does not expose permission gating yet.
+  - Tool outputs are still `String` (no structured ToolOutput).
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce structured ToolOutput (JSON) + optional metadata.
+  - Add PermissionGate integration in LoopContext (allow/ask/deny per tool).
