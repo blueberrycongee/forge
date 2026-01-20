@@ -170,6 +170,25 @@ impl SessionState {
                 });
                 true
             }
+            Event::Attachment {
+                name,
+                mime_type,
+                data,
+                ..
+            } => {
+                self.pending_parts.push(Part::Attachment {
+                    name: name.clone(),
+                    mime_type: mime_type.clone(),
+                    data: data.clone(),
+                });
+                true
+            }
+            Event::Error { message, .. } => {
+                self.pending_parts.push(Part::Error {
+                    message: message.clone(),
+                });
+                true
+            }
             _ => false,
         }
     }
@@ -350,6 +369,46 @@ mod tests {
                     cache_read: 4,
                     cache_write: 5,
                 }
+            }]
+        );
+    }
+
+    #[test]
+    fn session_state_apply_event_appends_attachment() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::Attachment {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            name: "file.txt".to_string(),
+            mime_type: "text/plain".to_string(),
+            data: serde_json::json!({"size": 4}),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.pending_parts,
+            vec![Part::Attachment {
+                name: "file.txt".to_string(),
+                mime_type: "text/plain".to_string(),
+                data: serde_json::json!({"size": 4}),
+            }]
+        );
+    }
+
+    #[test]
+    fn session_state_apply_event_appends_error() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::Error {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            message: "boom".to_string(),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.pending_parts,
+            vec![Part::Error {
+                message: "boom".to_string()
             }]
         );
     }

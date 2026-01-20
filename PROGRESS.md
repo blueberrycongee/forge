@@ -1097,3 +1097,27 @@ un and into_node methods.
 - Next steps:
   - Integrate SessionState apply_event/finalize flow into LoopNode/loop execution.
   - Add attachment/error handling in event ingestion.
+
+## 2026-01-21 06:00:26 SessionState Attachment/Error (Phase 5)
+
+- Date: 2026-01-21 06:00:26
+- Scope: Phase 5 event ingestion expansion
+- Summary: Added Attachment/Error events and SessionState mapping for them.
+- Changes:
+  - Added `Event::Attachment` and `Event::Error` variants.
+  - Extended `Part::from_event` and `SessionState::apply_event` to map attachments/errors.
+  - Added TDD coverage for attachment/error mapping in message and session state tests.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Attachment payload is untyped JSON without schema enforcement.
+  - Tool call tracking stores minimal status only (no timestamps).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate SessionState apply_event/finalize flow into LoopNode/loop execution.
+  - Add schema/metadata helpers for attachments if needed.

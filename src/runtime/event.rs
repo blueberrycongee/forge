@@ -38,6 +38,18 @@ pub enum Event {
         message_id: String,
         text: String,
     },
+    Attachment {
+        session_id: String,
+        message_id: String,
+        name: String,
+        mime_type: String,
+        data: serde_json::Value,
+    },
+    Error {
+        session_id: String,
+        message_id: String,
+        message: String,
+    },
     ToolStart {
         tool: String,
         call_id: String,

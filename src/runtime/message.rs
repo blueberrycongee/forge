@@ -92,6 +92,19 @@ impl Part {
             Event::TextFinal { text, .. } => Some(Part::TextFinal {
                 text: text.clone(),
             }),
+            Event::Attachment {
+                name,
+                mime_type,
+                data,
+                ..
+            } => Some(Part::Attachment {
+                name: name.clone(),
+                mime_type: mime_type.clone(),
+                data: data.clone(),
+            }),
+            Event::Error { message, .. } => Some(Part::Error {
+                message: message.clone(),
+            }),
             Event::ToolStart {
                 tool,
                 call_id,
@@ -167,6 +180,42 @@ mod tests {
             Part::from_event(&event),
             Some(Part::TextFinal {
                 text: "done".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn part_from_event_maps_attachment() {
+        let event = Event::Attachment {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            name: "file.txt".to_string(),
+            mime_type: "text/plain".to_string(),
+            data: serde_json::json!({"size": 4}),
+        };
+
+        assert_eq!(
+            Part::from_event(&event),
+            Some(Part::Attachment {
+                name: "file.txt".to_string(),
+                mime_type: "text/plain".to_string(),
+                data: serde_json::json!({"size": 4}),
+            })
+        );
+    }
+
+    #[test]
+    fn part_from_event_maps_error() {
+        let event = Event::Error {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            message: "boom".to_string(),
+        };
+
+        assert_eq!(
+            Part::from_event(&event),
+            Some(Part::Error {
+                message: "boom".to_string()
             })
         );
     }
