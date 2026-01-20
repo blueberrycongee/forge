@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+﻿use std::sync::{Arc, Mutex};
 
 use crate::runtime::event::{Event, EventSink};
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
@@ -10,6 +10,7 @@ use crate::runtime::permission::{
     PermissionSession,
 };
 use crate::runtime::node::NodeSpec;
+use crate::runtime::session_state::SessionState;
 use crate::runtime::state::GraphState;
 use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
 
@@ -165,6 +166,16 @@ impl<S: GraphState> LoopNode<S> {
         (self.handler)(state, ctx)
     }
 
+    pub fn run_with_session_state(
+        &self,
+        state: S,
+        session_state: Arc<Mutex<SessionState>>,
+        sink: Arc<dyn EventSink>,
+    ) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
+        let sink: Arc<dyn EventSink> = Arc::new(SessionStateSink::new(sink, session_state));
+        self.run(state, sink)
+    }
+
     pub fn into_node(self) -> NodeSpec<S> {
         let handler = Arc::clone(&self.handler);
         let tools = Arc::clone(&self.tools);
@@ -180,11 +191,33 @@ impl<S: GraphState> LoopNode<S> {
     }
 }
 
+struct SessionStateSink {
+    inner: Arc<dyn EventSink>,
+    session_state: Arc<Mutex<SessionState>>,
+}
+
+impl SessionStateSink {
+    fn new(inner: Arc<dyn EventSink>, session_state: Arc<Mutex<SessionState>>) -> Self {
+        Self {
+            inner,
+            session_state,
+        }
+    }
+}
+
+impl EventSink for SessionStateSink {
+    fn emit(&self, event: Event) {
+        self.session_state.lock().unwrap().apply_event(&event);
+        self.inner.emit(event);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::runtime::event::{Event, EventSink};
     use crate::runtime::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
+    use crate::runtime::session_state::{SessionState, ToolCallStatus};
     use crate::runtime::state::GraphState;
     use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
     use std::sync::{Arc, Mutex};
@@ -369,5 +402,43 @@ mod tests {
         assert!(captured
             .iter()
             .any(|event| matches!(event, Event::PermissionReplied { .. })));
+    }
+
+    #[test]
+    fn loop_node_updates_session_state_from_events() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
+
+        let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
+            ctx.emit(Event::TextDelta {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                delta: "hi".to_string(),
+            });
+            ctx.emit(Event::ToolStart {
+                tool: "read".to_string(),
+                call_id: "c1".to_string(),
+                input: serde_json::json!({"path": "file.txt"}),
+            });
+            ctx.emit(Event::ToolResult {
+                tool: "read".to_string(),
+                call_id: "c1".to_string(),
+                output: ToolOutput::text("ok"),
+            });
+            Ok(state)
+        });
+
+        let result = block_on(node.run_with_session_state(
+            LoopState::default(),
+            Arc::clone(&session_state),
+            sink,
+        ));
+        assert!(result.is_ok());
+
+        let session_state = session_state.lock().unwrap();
+        assert_eq!(session_state.pending_parts.len(), 3);
+        assert_eq!(session_state.tool_calls.len(), 1);
+        assert_eq!(session_state.tool_calls[0].status, ToolCallStatus::Completed);
     }
 }

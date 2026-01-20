@@ -1121,3 +1121,24 @@ un and into_node methods.
 - Next steps:
   - Integrate SessionState apply_event/finalize flow into LoopNode/loop execution.
   - Add schema/metadata helpers for attachments if needed.
+
+## 2026-01-21 06:04:18 LoopNode SessionState Wiring (Phase 5)
+
+- Date: 2026-01-21 06:04:18
+- Scope: Phase 5 loop integration
+- Summary: Added LoopNode helper to update SessionState from emitted events.
+- Changes:
+  - Added `LoopNode::run_with_session_state` with an event sink adapter.
+  - Added SessionState-aware sink to apply events before forwarding.
+  - Added TDD coverage for LoopNode event ingestion updating SessionState.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - SessionState finalize flow is not automatically triggered after runs.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Wire SessionState finalize flow (pending_parts -> messages) in loop execution.
+  - Add session state restoration into loop/session manager flows.
