@@ -335,3 +335,24 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Add ToolOutput schema/metadata helpers (typed fields).
   - Add persistence hooks for permission sessions (store/resume by session id).
+
+## 2026-01-21 03:08:45 ToolOutput Typed Metadata (Phase 2)
+
+- Date: 2026-01-21 03:08:45
+- Scope: Phase 2 ToolOutput schema/metadata helpers
+- Summary: Added typed ToolMetadata and helper methods for structured tool output annotations.
+- Changes:
+  - Added `ToolMetadata` with mime_type/schema/source/attributes (serde-ready).
+  - Updated ToolOutput metadata to use ToolMetadata instead of raw JSON.
+  - Added helper methods to set mime_type/schema/source/custom attributes.
+  - Added tests for metadata helpers and ToolOutput::with_metadata (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\tool.rs`
+- Known gaps / simplifications:
+  - No standardized schemas or enums for common tool outputs yet.
+  - ToolResult does not carry timestamps or token usage.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add persistence hooks for permission sessions (store/resume by session id).
+  - Introduce a ToolOutput schema registry for common tools (grep, read, ls).

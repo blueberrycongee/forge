@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::langgraph::error::GraphResult;
 use crate::langgraph::event::{Event, EventSink};
 use crate::langgraph::error::GraphError;
+use serde::{Deserialize, Serialize};
 
 /// Tool lifecycle states for execution tracking.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,11 +35,57 @@ impl ToolCall {
     }
 }
 
+/// Typed metadata for tool output.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ToolMetadata {
+    pub mime_type: Option<String>,
+    pub schema: Option<String>,
+    pub source: Option<String>,
+    pub attributes: serde_json::Map<String, serde_json::Value>,
+}
+
+impl ToolMetadata {
+    pub fn new() -> Self {
+        Self {
+            mime_type: None,
+            schema: None,
+            source: None,
+            attributes: serde_json::Map::new(),
+        }
+    }
+
+    pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    pub fn with_schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
+        self
+    }
+
+    pub fn with_source(mut self, source: impl Into<String>) -> Self {
+        self.source = Some(source.into());
+        self
+    }
+
+    pub fn with_attribute(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
+        self.attributes.insert(key.into(), value);
+        self
+    }
+}
+
+impl Default for ToolMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Structured tool output payload.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ToolOutput {
     pub content: serde_json::Value,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<ToolMetadata>,
 }
 
 impl ToolOutput {
@@ -49,7 +96,7 @@ impl ToolOutput {
         }
     }
 
-    pub fn with_metadata(content: serde_json::Value, metadata: serde_json::Value) -> Self {
+    pub fn with_metadata(content: serde_json::Value, metadata: ToolMetadata) -> Self {
         Self {
             content,
             metadata: Some(metadata),
@@ -58,6 +105,30 @@ impl ToolOutput {
 
     pub fn text(text: impl Into<String>) -> Self {
         Self::new(serde_json::Value::String(text.into()))
+    }
+
+    pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        let metadata = self.metadata.get_or_insert_with(ToolMetadata::new);
+        metadata.mime_type = Some(mime_type.into());
+        self
+    }
+
+    pub fn with_schema(mut self, schema: impl Into<String>) -> Self {
+        let metadata = self.metadata.get_or_insert_with(ToolMetadata::new);
+        metadata.schema = Some(schema.into());
+        self
+    }
+
+    pub fn with_source(mut self, source: impl Into<String>) -> Self {
+        let metadata = self.metadata.get_or_insert_with(ToolMetadata::new);
+        metadata.source = Some(source.into());
+        self
+    }
+
+    pub fn with_attribute(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
+        let metadata = self.metadata.get_or_insert_with(ToolMetadata::new);
+        metadata.attributes.insert(key.into(), value);
+        self
     }
 }
 
@@ -170,7 +241,7 @@ impl ToolRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::{ToolCall, ToolOutput, ToolRegistry, ToolRunner, ToolState};
+    use super::{ToolCall, ToolMetadata, ToolOutput, ToolRegistry, ToolRunner, ToolState};
     use crate::langgraph::event::{Event, EventSink};
     use futures::executor::block_on;
     use std::sync::{Arc, Mutex};
@@ -258,5 +329,30 @@ mod tests {
 
         let result = block_on(registry.run_with_events(call, sink));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn tool_output_metadata_helpers() {
+        let output = ToolOutput::text("hello")
+            .with_mime_type("text/plain")
+            .with_schema("v1")
+            .with_source("unit-test")
+            .with_attribute("lang", serde_json::json!("en"));
+
+        let metadata = output.metadata.expect("metadata");
+        assert_eq!(metadata.mime_type.as_deref(), Some("text/plain"));
+        assert_eq!(metadata.schema.as_deref(), Some("v1"));
+        assert_eq!(metadata.source.as_deref(), Some("unit-test"));
+        assert_eq!(metadata.attributes.get("lang"), Some(&serde_json::json!("en")));
+    }
+
+    #[test]
+    fn tool_output_with_metadata_accepts_struct() {
+        let metadata = ToolMetadata::new()
+            .with_mime_type("application/json")
+            .with_attribute("size", serde_json::json!(12));
+        let output = ToolOutput::with_metadata(serde_json::json!({"ok": true}), metadata.clone());
+
+        assert_eq!(output.metadata, Some(metadata));
     }
 }
