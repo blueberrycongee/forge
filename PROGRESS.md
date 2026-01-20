@@ -1052,3 +1052,24 @@ un and into_node methods.
 - Next steps:
   - Integrate SessionState finalize flow into LoopNode/loop execution.
   - Add helpers to append pending parts by event (TextDelta/ToolResult).
+
+## 2026-01-21 05:56:31 SessionState Event Mapping (Phase 5)
+
+- Date: 2026-01-21 05:56:31
+- Scope: Phase 5 session state event ingestion
+- Summary: Added SessionState helper to map runtime events into pending parts and tool call status.
+- Changes:
+  - Added `SessionState::apply_event` to capture TextDelta/ToolStart/ToolResult/ToolError.
+  - Added TDD coverage for pending part updates and tool lifecycle tracking.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Event mapping ignores TextFinal/TokenUsage/Attachment for now.
+  - Tool call tracking stores minimal status only (no timestamps).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate SessionState apply_event/finalize flow into LoopNode/loop execution.
+  - Expand event mapping to include TextFinal and TokenUsage parts.

@@ -105,12 +105,70 @@ impl SessionState {
         self.messages.push(message.clone());
         Some(message)
     }
+
+    pub fn apply_event(&mut self, event: &crate::runtime::event::Event) -> bool {
+        use crate::runtime::event::Event;
+        match event {
+            Event::TextDelta { delta, .. } => {
+                self.pending_parts.push(Part::TextDelta {
+                    delta: delta.clone(),
+                });
+                true
+            }
+            Event::ToolStart {
+                tool,
+                call_id,
+                input,
+            } => {
+                self.pending_parts.push(Part::ToolCall {
+                    tool: tool.clone(),
+                    call_id: call_id.clone(),
+                    input: input.clone(),
+                });
+                if !self.update_tool_call(call_id, ToolCallStatus::Running) {
+                    let mut record = ToolCallRecord::new(tool.clone(), call_id.clone());
+                    record.status = ToolCallStatus::Running;
+                    self.tool_calls.push(record);
+                }
+                true
+            }
+            Event::ToolResult {
+                tool,
+                call_id,
+                output,
+            } => {
+                self.pending_parts.push(Part::ToolResult {
+                    tool: tool.clone(),
+                    call_id: call_id.clone(),
+                    output: output.clone(),
+                });
+                self.update_tool_call(call_id, ToolCallStatus::Completed);
+                true
+            }
+            Event::ToolError {
+                tool,
+                call_id,
+                error,
+            } => {
+                self.pending_parts.push(Part::ToolError {
+                    tool: tool.clone(),
+                    call_id: call_id.clone(),
+                    error: error.clone(),
+                });
+                self.update_tool_call(call_id, ToolCallStatus::Error);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{SessionRouting, SessionState, ToolCallStatus};
+    use crate::runtime::event::Event;
     use crate::runtime::message::{MessageRole, Part};
+    use crate::runtime::tool::ToolOutput;
 
     #[test]
     fn session_state_new_initializes_fields() {
@@ -193,5 +251,46 @@ mod tests {
 
         assert!(message.is_none());
         assert!(state.messages.is_empty());
+    }
+
+    #[test]
+    fn session_state_apply_event_appends_text_delta() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::TextDelta {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            delta: "hi".to_string(),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.pending_parts,
+            vec![Part::TextDelta {
+                delta: "hi".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn session_state_apply_event_tracks_tool_lifecycle() {
+        let mut state = SessionState::new("s1", "m1");
+        let start = Event::ToolStart {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            input: serde_json::json!({"path": "file.txt"}),
+        };
+        let result = Event::ToolResult {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            output: ToolOutput::text("ok"),
+        };
+
+        assert!(state.apply_event(&start));
+        assert_eq!(state.tool_calls.len(), 1);
+        assert_eq!(state.tool_calls[0].status, ToolCallStatus::Running);
+
+        assert!(state.apply_event(&result));
+        assert_eq!(state.tool_calls[0].status, ToolCallStatus::Completed);
+        assert_eq!(state.pending_parts.len(), 2);
     }
 }
