@@ -169,3 +169,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Add a minimal tool execution facade to LoopNode that emits ToolStatus.
   - Define ToolCall input/output structures for richer lifecycle events.
+
+## 2026-01-21 02:29:54 ToolRunner Facade (Phase 2)
+
+- Date: 2026-01-21 02:29:54
+- Scope: Phase 2 tool execution facade
+- Summary: Added ToolRunner with lifecycle + start/result events for tool execution.
+- Changes:
+  - Added `ToolCall` struct to capture tool name, call ID, and input payload.
+  - Implemented `ToolRunner::run_with_events` to emit ToolStatus/ToolStart/ToolResult/ToolError.
+  - Exported `ToolCall`/`ToolRunner` via prelude.
+  - Added unit test covering event order and output (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Tool output is a `String`; no structured output type yet.
+  - No timestamps or token usage tied to tool lifecycle.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce structured ToolOutput (JSON) + optional metadata.
+  - Add a simple ToolRegistry to dispatch by name and wire into LoopNode.
