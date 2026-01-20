@@ -100,7 +100,7 @@ pub mod prelude {
     pub use crate::langgraph::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
     pub use crate::langgraph::compaction::{CompactionPolicy, CompactionResult};
     pub use crate::langgraph::prune::{PrunePolicy, PruneResult};
-    pub use crate::langgraph::trace::{ExecutionTrace, TraceEvent, TraceSpan};
+    pub use crate::langgraph::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
     pub use crate::langgraph::permission::{
         PermissionDecision,
         PermissionGate,

@@ -558,3 +558,22 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Implement TraceReplay to reconstruct event sequence.
+
+## 2026-01-21 03:38:14 Phase 3 Round 7 (Trace Replay)
+
+- Date: 2026-01-21 03:38:14
+- Scope: Phase 3 round 7 - trace replay
+- Summary: Added TraceReplay helper to replay recorded trace events.
+- Changes:
+  - Added `TraceReplay` with `replay` method.
+  - Added unit test for replay order (TDD).
+  - Exported TraceReplay in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\trace.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Replay only returns events; no reconstruction into state yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add SessionSnapshot (messages + trace + compaction summaries).

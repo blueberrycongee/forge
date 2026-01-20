@@ -39,9 +39,19 @@ impl ExecutionTrace {
     }
 }
 
+/// Replay trace events in order.
+#[derive(Clone, Debug, Default)]
+pub struct TraceReplay;
+
+impl TraceReplay {
+    pub fn replay(trace: &ExecutionTrace) -> Vec<TraceEvent> {
+        trace.events.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ExecutionTrace, TraceEvent, TraceSpan};
+    use super::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
 
     #[test]
     fn trace_records_events_and_spans() {
@@ -69,5 +79,18 @@ mod tests {
         let json = serde_json::to_value(&trace).expect("serialize");
         let decoded: ExecutionTrace = serde_json::from_value(json).expect("deserialize");
         assert_eq!(trace, decoded);
+    }
+
+    #[test]
+    fn trace_replay_returns_events_in_order() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        trace.record_event(TraceEvent::NodeFinish {
+            node: "a".to_string(),
+        });
+        let replayed = TraceReplay::replay(&trace);
+        assert_eq!(replayed, trace.events);
     }
 }
