@@ -237,3 +237,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce structured ToolOutput (JSON) + optional metadata.
   - Add PermissionGate integration in LoopContext (allow/ask/deny per tool).
+
+## 2026-01-21 02:44:53 LoopContext Permission Gate (Phase 2)
+
+- Date: 2026-01-21 02:44:53
+- Scope: Phase 2 permission gating in loop context
+- Summary: Integrated PermissionGate into LoopContext to block or ask before tool execution.
+- Changes:
+  - Added PermissionGate to LoopContext and LoopNode construction.
+  - Added LoopNode::with_tools_and_gate for explicit gate wiring.
+  - Implemented permission checks in LoopContext::run_tool (allow/ask/deny).
+  - Emitted PermissionAsked event on Ask decisions.
+  - Added unit test `loop_context_asks_permission_for_tool` (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\loop.rs`
+- Known gaps / simplifications:
+  - Ask/deny currently return ExecutionError; no resume flow yet.
+  - PermissionAsked event uses the requested permission as fallback patterns.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce structured ToolOutput (JSON) + optional metadata.
+  - Add permission reply/resume flow (PermissionReplied + Interrupt handling).

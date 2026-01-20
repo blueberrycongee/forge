@@ -1,7 +1,8 @@
 ﻿use std::sync::Arc;
 
-use crate::langgraph::error::GraphResult;
 use crate::langgraph::event::{Event, EventSink};
+use crate::langgraph::error::{GraphError, GraphResult};
+use crate::langgraph::permission::{PermissionDecision, PermissionGate, PermissionPolicy};
 use crate::langgraph::node::NodeSpec;
 use crate::langgraph::state::GraphState;
 use crate::langgraph::tool::{ToolCall, ToolRegistry};
@@ -11,11 +12,20 @@ use crate::langgraph::tool::{ToolCall, ToolRegistry};
 pub struct LoopContext {
     sink: Arc<dyn EventSink>,
     tools: Arc<ToolRegistry>,
+    gate: Arc<dyn PermissionGate>,
 }
 
 impl LoopContext {
     pub fn new(sink: Arc<dyn EventSink>, tools: Arc<ToolRegistry>) -> Self {
-        Self { sink, tools }
+        Self::new_with_gate(sink, tools, Arc::new(PermissionPolicy::default()))
+    }
+
+    pub fn new_with_gate(
+        sink: Arc<dyn EventSink>,
+        tools: Arc<ToolRegistry>,
+        gate: Arc<dyn PermissionGate>,
+    ) -> Self {
+        Self { sink, tools, gate }
     }
 
     pub fn emit(&self, event: Event) {
@@ -23,9 +33,28 @@ impl LoopContext {
     }
 
     pub async fn run_tool(&self, call: ToolCall) -> GraphResult<String> {
-        self.tools
-            .run_with_events(call, Arc::clone(&self.sink))
-            .await
+        let permission = format!("tool:{}", call.tool);
+        match self.gate.decide(&permission) {
+            PermissionDecision::Allow => {
+                self.tools
+                    .run_with_events(call, Arc::clone(&self.sink))
+                    .await
+            }
+            PermissionDecision::Ask => {
+                self.emit(Event::PermissionAsked {
+                    permission: permission.clone(),
+                    patterns: vec![permission.clone()],
+                });
+                Err(GraphError::ExecutionError {
+                    node: format!("permission:{}", permission),
+                    message: "permission required".to_string(),
+                })
+            }
+            PermissionDecision::Deny => Err(GraphError::ExecutionError {
+                node: format!("permission:{}", permission),
+                message: "permission denied".to_string(),
+            }),
+        }
     }
 }
 
@@ -36,7 +65,12 @@ impl LoopContext {
 pub struct LoopNode<S: GraphState> {
     name: String,
     tools: Arc<ToolRegistry>,
-    handler: Arc<dyn Fn(S, LoopContext) -> crate::langgraph::node::BoxFuture<'static, GraphResult<S>> + Send + Sync>,
+    gate: Arc<dyn PermissionGate>,
+    handler: Arc<
+        dyn Fn(S, LoopContext) -> crate::langgraph::node::BoxFuture<'static, GraphResult<S>>
+            + Send
+            + Sync,
+    >,
 }
 
 impl<S: GraphState> LoopNode<S> {
@@ -46,7 +80,8 @@ impl<S: GraphState> LoopNode<S> {
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
     {
         let tools = Arc::new(ToolRegistry::new());
-        Self::with_tools(name, tools, handler)
+        let gate: Arc<dyn PermissionGate> = Arc::new(PermissionPolicy::default());
+        Self::with_tools_and_gate(name, tools, gate, handler)
     }
 
     pub fn with_tools<F, Fut>(
@@ -58,9 +93,24 @@ impl<S: GraphState> LoopNode<S> {
         F: Fn(S, LoopContext) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
     {
+        let gate: Arc<dyn PermissionGate> = Arc::new(PermissionPolicy::default());
+        Self::with_tools_and_gate(name, tools, gate, handler)
+    }
+
+    pub fn with_tools_and_gate<F, Fut>(
+        name: impl Into<String>,
+        tools: Arc<ToolRegistry>,
+        gate: Arc<dyn PermissionGate>,
+        handler: F,
+    ) -> Self
+    where
+        F: Fn(S, LoopContext) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
+    {
         Self {
             name: name.into(),
             tools,
+            gate,
             handler: Arc::new(move |state, ctx| Box::pin(handler(state, ctx))),
         }
     }
@@ -70,15 +120,24 @@ impl<S: GraphState> LoopNode<S> {
     }
 
     pub fn run(&self, state: S, sink: Arc<dyn EventSink>) -> crate::langgraph::node::BoxFuture<'static, GraphResult<S>> {
-        let ctx = LoopContext::new(sink, Arc::clone(&self.tools));
+        let ctx = LoopContext::new_with_gate(
+            sink,
+            Arc::clone(&self.tools),
+            Arc::clone(&self.gate),
+        );
         (self.handler)(state, ctx)
     }
 
     pub fn into_node(self) -> NodeSpec<S> {
         let handler = Arc::clone(&self.handler);
         let tools = Arc::clone(&self.tools);
+        let gate = Arc::clone(&self.gate);
         NodeSpec::new_stream(self.name, move |state, sink| {
-            let ctx = LoopContext::new(sink, Arc::clone(&tools));
+            let ctx = LoopContext::new_with_gate(
+                sink,
+                Arc::clone(&tools),
+                Arc::clone(&gate),
+            );
             handler(state, ctx)
         })
     }
@@ -88,6 +147,7 @@ impl<S: GraphState> LoopNode<S> {
 mod tests {
     use super::*;
     use crate::langgraph::event::{Event, EventSink};
+    use crate::langgraph::permission::{PermissionDecision, PermissionPolicy, PermissionRule};
     use crate::langgraph::state::GraphState;
     use crate::langgraph::tool::{ToolCall, ToolRegistry};
     use std::sync::{Arc, Mutex};
@@ -155,5 +215,37 @@ mod tests {
             .unwrap()
             .iter()
             .any(|event| matches!(event, Event::ToolResult { .. })));
+    }
+
+    #[test]
+    fn loop_context_asks_permission_for_tool() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let mut registry = ToolRegistry::new();
+        registry.register("echo", Arc::new(|call| {
+            Box::pin(async move { Ok(format!("ok:{}", call.tool)) })
+        }));
+        let registry = Arc::new(registry);
+        let gate = Arc::new(PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )]));
+
+        let node = LoopNode::with_tools_and_gate(
+            "loop",
+            Arc::clone(&registry),
+            gate,
+            |state: LoopState, ctx| async move {
+                ctx.run_tool(ToolCall::new("echo", "call-ask", serde_json::json!({})))
+                    .await?;
+                Ok(state)
+            },
+        );
+
+        let result = block_on(node.run(LoopState::default(), sink));
+        assert!(result.is_err());
+        let captured = events.lock().unwrap();
+        assert!(captured.iter().any(|event| matches!(event, Event::PermissionAsked { .. })));
+        assert!(!captured.iter().any(|event| matches!(event, Event::ToolStart { .. })));
     }
 }
