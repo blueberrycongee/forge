@@ -36,9 +36,23 @@ impl CompactionResult {
     }
 }
 
+/// Hook to customize compaction behavior (pre/post).
+pub trait CompactionHook: Send + Sync {
+    fn before_compaction(&self, _messages: &[String]) -> Option<String> {
+        None
+    }
+
+    fn after_compaction(&self, _result: &CompactionResult) {}
+}
+
+/// Default no-op compaction hook.
+pub struct NoopCompactionHook;
+
+impl CompactionHook for NoopCompactionHook {}
+
 #[cfg(test)]
 mod tests {
-    use super::{CompactionPolicy, CompactionResult};
+    use super::{CompactionHook, CompactionPolicy, CompactionResult, NoopCompactionHook};
 
     #[test]
     fn compaction_policy_threshold() {
@@ -52,5 +66,12 @@ mod tests {
         let result = CompactionResult::new("summary", 10);
         assert_eq!(result.summary, "summary");
         assert_eq!(result.truncated_before, 10);
+    }
+
+    #[test]
+    fn compaction_hook_defaults() {
+        let hook = NoopCompactionHook;
+        assert_eq!(hook.before_compaction(&["m1".to_string()]), None);
+        hook.after_compaction(&CompactionResult::new("summary", 1));
     }
 }

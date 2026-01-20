@@ -460,3 +460,21 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Add compaction hook trait and wiring points in executor/loop.
+
+## 2026-01-21 03:29:15 Phase 3 Round 2 (Compaction Hooks)
+
+- Date: 2026-01-21 03:29:15
+- Scope: Phase 3 round 2 - compaction hooks
+- Summary: Added compaction hook trait and no-op implementation.
+- Changes:
+  - Added `CompactionHook` trait with before/after callbacks.
+  - Added `NoopCompactionHook` default implementation.
+  - Added unit test for default hook behavior (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\compaction.rs`
+- Known gaps / simplifications:
+  - Hooks are not wired into executor/loop yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Wire compaction hooks into executor/loop.
