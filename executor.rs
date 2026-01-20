@@ -14,7 +14,13 @@ use crate::langgraph::error::{GraphError, GraphResult, Interrupt, ResumeCommand}
 use crate::langgraph::state::GraphState;
 use crate::langgraph::graph::{StateGraph, Edge};
 use crate::langgraph::event::{Event, EventSink};
-use crate::langgraph::compaction::{CompactionHook, CompactionPolicy, NoopCompactionHook, CompactionResult};
+use crate::langgraph::compaction::{
+    CompactionContext,
+    CompactionHook,
+    CompactionPolicy,
+    NoopCompactionHook,
+    CompactionResult,
+};
 use crate::langgraph::prune::{PrunePolicy, prune_tool_events};
 use crate::langgraph::trace::{ExecutionTrace, TraceEvent};
 use crate::langgraph::session::{SessionSnapshot, SessionMessage};
@@ -449,7 +455,8 @@ impl<S: GraphState> CompiledGraph<S> {
             let message_count = resolve_message_count(&snapshot, &history);
             if self.config.compaction_policy.should_compact(message_count) {
                 let messages = collect_compaction_messages(&snapshot);
-                if let Some(summary) = self.config.compaction_hook.before_compaction(&messages) {
+                let context = CompactionContext::new(messages);
+                if let Some(summary) = self.config.compaction_hook.before_compaction(&context) {
                     let result = CompactionResult::new(summary, 0);
                     self.config.compaction_hook.after_compaction(&result);
                     let session_id = resolve_session_id(&state);
@@ -851,7 +858,7 @@ mod tests {
     }
 
     impl CompactionHook for TestCompactionHook {
-        fn before_compaction(&self, _messages: &[String]) -> Option<String> {
+        fn before_compaction(&self, _context: &CompactionContext) -> Option<String> {
             let mut calls = self.calls.lock().unwrap();
             if *calls == 0 {
                 *calls += 1;

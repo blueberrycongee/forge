@@ -662,6 +662,26 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Phase 4 Round 2: compaction prompt/summary slots via hook context object.
 
+## 2026-01-21 03:52:40 Phase 4 Round 2 (Compaction Hook Context)
+
+- Date: 2026-01-21 03:52:40
+- Scope: Phase 4 round 2 - compaction hook context
+- Summary: Added CompactionContext with prompt hint support and updated hook signature.
+- Changes:
+  - Added `CompactionContext` carrying messages and prompt_hint.
+  - Updated CompactionHook to accept CompactionContext.
+  - Updated executor compaction call site to pass context.
+  - Added tests for context and updated hook test (TDD).
+- Files touched:
+  - `D:\Desktop\opencode\forge\compaction.rs`
+  - `D:\Desktop\opencode\forge\executor.rs`
+- Known gaps / simplifications:
+  - prompt_hint is optional and not used by executor yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Phase 4 Round 3: unify prune/compaction scheduling.
+
 ## 2026-01-21 03:47:01 Phase 3 Complete (MVP-2)
 
 - Date: 2026-01-21 03:47:01

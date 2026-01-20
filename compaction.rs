@@ -36,9 +36,30 @@ impl CompactionResult {
     }
 }
 
+/// Context passed to compaction hooks.
+#[derive(Clone, Debug)]
+pub struct CompactionContext {
+    pub messages: Vec<String>,
+    pub prompt_hint: Option<String>,
+}
+
+impl CompactionContext {
+    pub fn new(messages: Vec<String>) -> Self {
+        Self {
+            messages,
+            prompt_hint: None,
+        }
+    }
+
+    pub fn with_prompt_hint(mut self, hint: impl Into<String>) -> Self {
+        self.prompt_hint = Some(hint.into());
+        self
+    }
+}
+
 /// Hook to customize compaction behavior (pre/post).
 pub trait CompactionHook: Send + Sync + std::fmt::Debug {
-    fn before_compaction(&self, _messages: &[String]) -> Option<String> {
+    fn before_compaction(&self, _context: &CompactionContext) -> Option<String> {
         None
     }
 
@@ -53,7 +74,13 @@ impl CompactionHook for NoopCompactionHook {}
 
 #[cfg(test)]
 mod tests {
-    use super::{CompactionHook, CompactionPolicy, CompactionResult, NoopCompactionHook};
+    use super::{
+        CompactionContext,
+        CompactionHook,
+        CompactionPolicy,
+        CompactionResult,
+        NoopCompactionHook,
+    };
 
     #[test]
     fn compaction_policy_threshold() {
@@ -72,7 +99,15 @@ mod tests {
     #[test]
     fn compaction_hook_defaults() {
         let hook = NoopCompactionHook;
-        assert_eq!(hook.before_compaction(&["m1".to_string()]), None);
+        let context = CompactionContext::new(vec!["m1".to_string()]);
+        assert_eq!(hook.before_compaction(&context), None);
         hook.after_compaction(&CompactionResult::new("summary", 1));
+    }
+
+    #[test]
+    fn compaction_context_holds_prompt_hint() {
+        let context = CompactionContext::new(vec!["m1".to_string()])
+            .with_prompt_hint("focus");
+        assert_eq!(context.prompt_hint.as_deref(), Some("focus"));
     }
 }
