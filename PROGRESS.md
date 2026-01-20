@@ -539,3 +539,22 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Add trace/replay data structures (TraceEvent/TraceSpan).
+
+## 2026-01-21 03:37:03 Phase 3 Round 6 (Trace Structures)
+
+- Date: 2026-01-21 03:37:03
+- Scope: Phase 3 round 6 - trace data structures
+- Summary: Added trace event/span data structures with serde support.
+- Changes:
+  - Added `TraceEvent`, `TraceSpan`, and `ExecutionTrace`.
+  - Added trace record helpers and roundtrip tests (TDD).
+  - Exported trace types in prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\trace.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Trace is not yet wired into executor or replay engine.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Implement TraceReplay to reconstruct event sequence.
