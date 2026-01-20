@@ -191,3 +191,25 @@ This log records atomic development progress for Forge. Each entry must be detai
 - Next steps:
   - Introduce structured ToolOutput (JSON) + optional metadata.
   - Add a simple ToolRegistry to dispatch by name and wire into LoopNode.
+
+## 2026-01-21 02:38:15 ToolRegistry Dispatch (Phase 2)
+
+- Date: 2026-01-21 02:38:15
+- Scope: Phase 2 tool dispatch registry
+- Summary: Added ToolRegistry for name-based dispatch with lifecycle event emission.
+- Changes:
+  - Added `ToolHandler` alias and `ToolRegistry` with register/has/run_with_events.
+  - Registry delegates to ToolRunner for lifecycle events and error emission.
+  - Added tests for registry dispatch and missing-tool error (TDD).
+  - Exported `ToolRegistry` via prelude.
+- Files touched:
+  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\opencode\forge\mod.rs`
+- Known gaps / simplifications:
+  - Registry uses `String` output (no structured ToolOutput yet).
+  - No tool metadata/permissions integration yet.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Introduce structured ToolOutput (JSON) + optional metadata.
+  - Wire ToolRegistry into LoopNode to drive tool calls from the loop.
