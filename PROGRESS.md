@@ -1622,3 +1622,23 @@ un and into_node methods.
 - Next steps:
   - Decide whether to make sorting optional via API flag.
   - Integrate record log reading into platform adapters.
+
+## 2026-01-22 00:10:23 Plan Update for Event Protocol (Phase 5)
+
+- Date: 2026-01-22 00:10:23
+- Scope: Phase 5 plan alignment
+- Summary: Updated runtime plan status for event protocol metadata progress.
+- Changes:
+  - Marked J1.3 event protocol items as partially complete based on record metadata work.
+  - Noted record-level versioning, ordering, and replay coverage in plan.
+- Files touched:
+  - `D:\Desktop\opencode\forge\docs\OPENCODE_RUNTIME_PLAN.md`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Emitted event stream still lacks event_id/timestamp/seq fields.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - Not applicable (documentation update only).
+- Next steps:
+  - Decide how to attach metadata to SSE/CLI/IDE event streams.
+  - Update plan once adapters are wired.
