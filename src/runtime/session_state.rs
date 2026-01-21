@@ -139,6 +139,42 @@ impl SessionState {
         self.phase = SessionPhase::Resumed;
     }
 
+    pub fn can_transition(&self, next: &SessionPhase) -> bool {
+        use SessionPhase::*;
+        if &self.phase == next {
+            return true;
+        }
+        if matches!(next, Interrupted) {
+            return !matches!(self.phase, Completed);
+        }
+        match (&self.phase, next) {
+            (UserInput, ModelThinking) => true,
+            (ModelThinking, AssistantStreaming) => true,
+            (AssistantStreaming, ToolProposed) => true,
+            (AssistantStreaming, AssistantFinalize) => true,
+            (ToolProposed, ToolRunning) => true,
+            (ToolRunning, ToolResult) => true,
+            (ToolResult, AssistantStreaming) => true,
+            (ToolResult, AssistantFinalize) => true,
+            (AssistantFinalize, Completed) => true,
+            (Interrupted, Resumed) => true,
+            (Resumed, ModelThinking) => true,
+            _ => false,
+        }
+    }
+
+    pub fn try_transition(&mut self, next: SessionPhase) -> Result<(), String> {
+        if self.can_transition(&next) {
+            self.phase = next;
+            Ok(())
+        } else {
+            Err(format!(
+                "invalid transition {:?} -> {:?}",
+                self.phase, next
+            ))
+        }
+    }
+
     pub fn push_tool_call(&mut self, tool: impl Into<String>, call_id: impl Into<String>) {
         self.tool_calls.push(ToolCallRecord::new(tool, call_id));
     }
@@ -323,6 +359,27 @@ mod tests {
 
         state.mark_resumed();
         assert_eq!(state.phase, SessionPhase::Resumed);
+    }
+
+    #[test]
+    fn session_state_try_transition_allows_happy_path() {
+        let mut state = SessionState::new("s1", "m1");
+
+        assert!(state.try_transition(SessionPhase::ModelThinking).is_ok());
+        assert!(state.try_transition(SessionPhase::AssistantStreaming).is_ok());
+        assert!(state.try_transition(SessionPhase::ToolProposed).is_ok());
+        assert!(state.try_transition(SessionPhase::ToolRunning).is_ok());
+        assert!(state.try_transition(SessionPhase::ToolResult).is_ok());
+        assert!(state.try_transition(SessionPhase::AssistantFinalize).is_ok());
+        assert!(state.try_transition(SessionPhase::Completed).is_ok());
+    }
+
+    #[test]
+    fn session_state_try_transition_rejects_invalid() {
+        let mut state = SessionState::new("s1", "m1");
+
+        assert!(state.try_transition(SessionPhase::ToolRunning).is_err());
+        assert_eq!(state.phase, SessionPhase::UserInput);
     }
 
     #[test]

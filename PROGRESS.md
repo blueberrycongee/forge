@@ -1185,3 +1185,23 @@ un and into_node methods.
 - Next steps:
   - Validate phase transitions (guard illegal transitions) and emit state transition events.
   - Integrate phase updates into LoopNode/loop execution flow.
+
+## 2026-01-21 17:18:34 SessionPhase Transition Guards (Phase 5)
+
+- Date: 2026-01-21 17:18:34
+- Scope: Phase 5 session phase validation
+- Summary: Added transition guard helpers for SessionPhase with TDD coverage.
+- Changes:
+  - Added `can_transition` and `try_transition` on SessionState with a minimal allowed path.
+  - Added tests for happy-path transitions and invalid transition rejection.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Transition rules are minimal and not yet enforced by mark_* helpers.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\\cargo.exe test`
+- Next steps:
+  - Wire phase transitions into LoopNode/SessionState flows (use try_transition).
+  - Emit explicit state transition events for replay/audit.
