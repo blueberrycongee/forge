@@ -240,3 +240,16 @@ pub struct NoopEventSink;
 impl EventSink for NoopEventSink {
     fn emit(&self, _event: Event) {}
 }
+
+/// Event sink for protocol records (event_id/timestamp/seq).
+pub trait EventRecordSink: Send + Sync + Debug {
+    fn emit_record(&self, record: EventRecord);
+}
+
+/// A no-op event record sink for tests or silent execution.
+#[derive(Debug)]
+pub struct NoopEventRecordSink;
+
+impl EventRecordSink for NoopEventRecordSink {
+    fn emit_record(&self, _record: EventRecord) {}
+}

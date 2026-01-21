@@ -13,7 +13,7 @@ use crate::runtime::constants::{START, END, MAX_ITERATIONS};
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
 use crate::runtime::state::GraphState;
 use crate::runtime::graph::{StateGraph, Edge};
-use crate::runtime::event::{Event, EventRecord, EventSequencer, EventSink};
+use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSequencer, EventSink};
 use crate::runtime::compaction::{
     CompactionContext,
     CompactionHook,
@@ -57,6 +57,8 @@ pub struct ExecutionConfig {
     pub prune_policy: PrunePolicy,
     /// Optional event history buffer
     pub event_history: Option<Arc<std::sync::Mutex<Vec<EventRecord>>>>,
+    /// Optional event record sink (for protocol metadata)
+    pub event_record_sink: Option<Arc<dyn EventRecordSink>>,
     /// Optional trace collector
     pub trace: Option<Arc<std::sync::Mutex<ExecutionTrace>>>,
     /// Optional session snapshot collector
@@ -78,6 +80,7 @@ impl ExecutionConfig {
             prune_before_compaction: true,
             prune_policy: PrunePolicy::default(),
             event_history: None,
+            event_record_sink: None,
             trace: None,
             session_snapshot: None,
         }
@@ -98,6 +101,7 @@ impl ExecutionConfig {
             prune_before_compaction: true,
             prune_policy: PrunePolicy::default(),
             event_history: None,
+            event_record_sink: None,
             trace: None,
             session_snapshot: None,
         }
@@ -159,6 +163,12 @@ impl ExecutionConfig {
         history: Arc<std::sync::Mutex<Vec<EventRecord>>>,
     ) -> Self {
         self.event_history = Some(history);
+        self
+    }
+
+    /// Attach an event record sink for stream_events metadata.
+    pub fn with_event_record_sink(mut self, sink: Arc<dyn EventRecordSink>) -> Self {
+        self.event_record_sink = Some(sink);
         self
     }
 
@@ -431,16 +441,23 @@ impl<S: GraphState> CompiledGraph<S> {
         let mut state = initial_state;
         let mut current_node = self.get_next_node(START, &state)?;
         let mut iterations = 0;
-        let use_history = self.config.prune_policy.enabled || self.config.event_history.is_some();
+        let use_history = self.config.prune_policy.enabled
+            || self.config.event_history.is_some()
+            || self.config.event_record_sink.is_some();
         let history = self
             .config
             .event_history
             .clone()
             .unwrap_or_else(|| Arc::new(std::sync::Mutex::new(Vec::new())));
+        let record_sink = self.config.event_record_sink.clone();
         let trace = self.config.trace.clone();
         let snapshot = self.config.session_snapshot.clone();
         let sink: Arc<dyn EventSink> = if use_history {
-            Arc::new(RecordingSink::new(sink, Arc::clone(&history)))
+            Arc::new(RecordingSink::new(
+                sink,
+                Arc::clone(&history),
+                record_sink,
+            ))
         } else {
             sink
         };
@@ -757,6 +774,7 @@ struct RecordingSink {
     inner: Arc<dyn EventSink>,
     history: Arc<std::sync::Mutex<Vec<EventRecord>>>,
     sequencer: EventSequencer,
+    record_sink: Option<Arc<dyn EventRecordSink>>,
 }
 
 fn resolve_message_count(
@@ -787,11 +805,16 @@ fn collect_compaction_messages(
 }
 
 impl RecordingSink {
-    fn new(inner: Arc<dyn EventSink>, history: Arc<std::sync::Mutex<Vec<EventRecord>>>) -> Self {
+    fn new(
+        inner: Arc<dyn EventSink>,
+        history: Arc<std::sync::Mutex<Vec<EventRecord>>>,
+        record_sink: Option<Arc<dyn EventRecordSink>>,
+    ) -> Self {
         Self {
             inner,
             history,
             sequencer: EventSequencer::new(),
+            record_sink,
         }
     }
 }
@@ -799,7 +822,10 @@ impl RecordingSink {
 impl EventSink for RecordingSink {
     fn emit(&self, event: Event) {
         let record = self.sequencer.record(event.clone());
-        self.history.lock().unwrap().push(record);
+        self.history.lock().unwrap().push(record.clone());
+        if let Some(record_sink) = &self.record_sink {
+            record_sink.emit_record(record.clone());
+        }
         self.inner.emit(event);
     }
 }
@@ -821,7 +847,7 @@ impl<S: GraphState> Clone for CompiledGraph<S> {
 mod tests {
     use super::*;
     use crate::runtime::constants::START;
-    use crate::runtime::event::{Event, EventSink};
+    use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSink};
     use crate::runtime::graph::StateGraph;
     use crate::runtime::prune::PrunePolicy;
     use crate::runtime::state::GraphState;
@@ -899,6 +925,17 @@ mod tests {
     impl EventSink for CaptureSink {
         fn emit(&self, event: Event) {
             self.events.lock().unwrap().push(event);
+        }
+    }
+
+    #[derive(Debug)]
+    struct CaptureRecordSink {
+        records: Arc<Mutex<Vec<EventRecord>>>,
+    }
+
+    impl EventRecordSink for CaptureRecordSink {
+        fn emit_record(&self, record: EventRecord) {
+            self.records.lock().unwrap().push(record);
         }
     }
 
@@ -985,6 +1022,53 @@ mod tests {
             .iter()
             .any(|event| matches!(event, Event::SessionCompacted { .. })));
         assert_eq!(*hook_calls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn stream_events_emits_event_records_with_metadata() {
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let record_sink: Arc<dyn EventRecordSink> = Arc::new(CaptureRecordSink {
+            records: records.clone(),
+        });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: Arc::new(Mutex::new(Vec::new())),
+        });
+
+        let mut graph = StateGraph::<StreamState>::new();
+        graph.add_stream_node("node", |state, sink| async move {
+            sink.emit(Event::TextDelta {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                delta: "hello".to_string(),
+            });
+            Ok(state)
+        });
+        graph.add_edge(START, "node");
+        graph.add_edge("node", END);
+
+        let compiled = graph
+            .compile()
+            .expect("compile")
+            .with_config(ExecutionConfig::new().with_event_record_sink(record_sink));
+
+        let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
+
+        let captured = records.lock().unwrap();
+        assert!(!captured.is_empty());
+        assert!(captured
+            .iter()
+            .all(|record| record.meta.timestamp_ms > 0));
+        assert!(captured
+            .iter()
+            .all(|record| !record.meta.event_id.is_empty()));
+        assert!(captured
+            .iter()
+            .any(|record| matches!(record.event, Event::TextDelta { .. })));
+        if captured.len() > 1 {
+            assert!(captured
+                .windows(2)
+                .all(|pair| pair[0].meta.seq < pair[1].meta.seq));
+        }
     }
 
     #[test]

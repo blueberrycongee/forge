@@ -1356,3 +1356,27 @@ un and into_node methods.
 - Next steps:
   - Decide how to attach metadata to the emitted Event stream (SSE/CLI/IDE).
   - Add event_id/timestamp/seq to protocol output and replay ordering.
+
+## 2026-01-21 22:30:11 Event Record Sink (Phase 5)
+
+- Date: 2026-01-21 22:30:11
+- Scope: Phase 5 protocol metadata output hook
+- Summary: Added EventRecordSink to surface event metadata alongside emitted events.
+- Changes:
+  - Added `EventRecordSink` + `NoopEventRecordSink` to runtime events.
+  - ExecutionConfig now accepts an optional event record sink.
+  - RecordingSink forwards `EventRecord` metadata to the sink while emitting events.
+  - Added TDD coverage for record sink emission with metadata.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Record sink is optional; existing SSE/CLI/IDE adapters still need wiring.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Wire EventRecordSink into SSE/CLI/IDE adapters and event streaming output.
+  - Define replay ordering guarantees using seq/timestamp.
