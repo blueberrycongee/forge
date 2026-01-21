@@ -79,6 +79,10 @@ pub fn sort_records_by_meta(records: &mut [EventRecord]) {
     records.sort_by(EventRecord::cmp_meta);
 }
 
+pub fn max_record_seq(records: &[EventRecord]) -> Option<u64> {
+    records.iter().map(|record| record.meta.seq).max()
+}
+
 /// Sequencer for assigning event ids, timestamps, and sequence numbers.
 #[derive(Debug, Default)]
 pub struct EventSequencer {
@@ -192,7 +196,15 @@ pub enum Event {
 
 #[cfg(test)]
 mod tests {
-    use super::{sort_records_by_meta, Event, EventMeta, EventRecord, EventSequencer, TokenUsage};
+    use super::{
+        max_record_seq,
+        sort_records_by_meta,
+        Event,
+        EventMeta,
+        EventRecord,
+        EventSequencer,
+        TokenUsage,
+    };
     use crate::runtime::tool::ToolState;
 
     #[test]
@@ -332,6 +344,39 @@ mod tests {
 
         let ids: Vec<&str> = records.iter().map(|record| record.meta.event_id.as_str()).collect();
         assert_eq!(ids, vec!["c", "a", "b"]);
+    }
+
+    #[test]
+    fn max_record_seq_returns_none_for_empty() {
+        let records: Vec<EventRecord> = Vec::new();
+        assert_eq!(max_record_seq(&records), None);
+    }
+
+    #[test]
+    fn max_record_seq_returns_max_seq() {
+        let base = Event::StepStart {
+            session_id: "s1".to_string(),
+        };
+        let records = vec![
+            EventRecord::with_meta(
+                base.clone(),
+                EventMeta {
+                    event_id: "a".to_string(),
+                    timestamp_ms: 1,
+                    seq: 5,
+                },
+            ),
+            EventRecord::with_meta(
+                base,
+                EventMeta {
+                    event_id: "b".to_string(),
+                    timestamp_ms: 2,
+                    seq: 9,
+                },
+            ),
+        ];
+
+        assert_eq!(max_record_seq(&records), Some(9));
     }
 }
 

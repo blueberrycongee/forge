@@ -1481,3 +1481,23 @@ un and into_node methods.
 - Next steps:
   - Use start offset when replaying persisted EventRecords.
   - Expose start offset in platform adapters if needed.
+
+## 2026-01-21 22:41:11 Event Record Max Seq Helper (Phase 5)
+
+- Date: 2026-01-21 22:41:11
+- Scope: Phase 5 replay continuity helpers
+- Summary: Added helper to compute max seq from EventRecords.
+- Changes:
+  - Added `max_record_seq` utility.
+  - Added TDD coverage for empty and non-empty inputs.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Helper not yet used to seed replay sequencing.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Use `max_record_seq` + `EventSequencer::with_start_seq` in replay flows.
+  - Integrate helper into platform adapters for continuity.
