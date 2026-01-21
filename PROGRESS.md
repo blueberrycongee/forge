@@ -1602,3 +1602,23 @@ un and into_node methods.
 - Next steps:
   - Integrate replay helper into platform adapters (CLI/SSE/IDE).
   - Decide default record log location.
+
+## 2026-01-22 00:02:49 Record Log Sorting on Read (Phase 5)
+
+- Date: 2026-01-22 00:02:49
+- Scope: Phase 5 record log normalization
+- Summary: Ensure read audit logs return records in deterministic seq order.
+- Changes:
+  - `read_audit_log_records` now sorts records by seq/timestamp/event_id.
+  - Added TDD coverage for ordering on read.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Sorting is applied unconditionally; no option to preserve original order.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide whether to make sorting optional via API flag.
+  - Integrate record log reading into platform adapters.

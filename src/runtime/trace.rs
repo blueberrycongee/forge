@@ -168,10 +168,11 @@ impl TraceReplay {
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
         match value {
             serde_json::Value::Array(_) => {
-                let records: Vec<crate::runtime::event::EventRecord> =
+                let mut records: Vec<crate::runtime::event::EventRecord> =
                     serde_json::from_value(value).map_err(|err| {
                         std::io::Error::new(std::io::ErrorKind::InvalidData, err)
                     })?;
+                crate::runtime::event::sort_records_by_meta(&mut records);
                 Ok(records)
             }
             serde_json::Value::Object(mut obj) => {
@@ -196,10 +197,11 @@ impl TraceReplay {
                         "missing record log records",
                     )
                 })?;
-                let records: Vec<crate::runtime::event::EventRecord> =
+                let mut records: Vec<crate::runtime::event::EventRecord> =
                     serde_json::from_value(records_value).map_err(|err| {
                         std::io::Error::new(std::io::ErrorKind::InvalidData, err)
                     })?;
+                crate::runtime::event::sort_records_by_meta(&mut records);
                 Ok(records)
             }
             _ => Err(std::io::Error::new(
@@ -552,5 +554,47 @@ mod tests {
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 1);
         assert_eq!(captured[0].meta.seq, 2);
+    }
+
+    #[test]
+    fn trace_replay_read_audit_log_records_sorts_by_seq() {
+        let path = std::env::temp_dir().join(format!(
+            "forge-audit-records-sort-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        let records = vec![
+            EventRecord::with_meta(
+                Event::StepStart {
+                    session_id: "s1".to_string(),
+                },
+                crate::runtime::event::EventMeta {
+                    event_id: "b".to_string(),
+                    timestamp_ms: 2,
+                    seq: 2,
+                },
+            ),
+            EventRecord::with_meta(
+                Event::StepStart {
+                    session_id: "s1".to_string(),
+                },
+                crate::runtime::event::EventMeta {
+                    event_id: "a".to_string(),
+                    timestamp_ms: 1,
+                    seq: 1,
+                },
+            ),
+        ];
+        let value = serde_json::json!({
+            "version": 1,
+            "records": records,
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&value).expect("serialize"))
+            .expect("write");
+
+        let read = TraceReplay::read_audit_log_records(&path).expect("read");
+
+        assert_eq!(read.len(), 2);
+        assert_eq!(read[0].meta.seq, 1);
+        assert_eq!(read[1].meta.seq, 2);
     }
 }
