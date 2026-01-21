@@ -1205,3 +1205,23 @@ un and into_node methods.
 - Next steps:
   - Wire phase transitions into LoopNode/SessionState flows (use try_transition).
   - Emit explicit state transition events for replay/audit.
+
+## 2026-01-21 17:20:44 SessionState Event Phase Updates (Phase 5)
+
+- Date: 2026-01-21 17:20:44
+- Scope: Phase 5 session phase + event ingestion
+- Summary: SessionState now advances phase when ingesting core events.
+- Changes:
+  - apply_event now advances phase for TextDelta/TextFinal/ToolStart/ToolResult/ToolError/StepFinish.
+  - Added TDD coverage for phase changes on TextDelta, ToolStart, ToolResult, and StepFinish.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Phase updates are best-effort (try_transition failure is ignored).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\\cargo.exe test`
+- Next steps:
+  - Enforce phase transitions (surface errors) and emit state transition events.
+  - Hook phase updates into LoopNode finalize flow (use try_transition).

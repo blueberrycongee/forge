@@ -202,12 +202,14 @@ impl SessionState {
         use crate::runtime::event::Event;
         match event {
             Event::TextDelta { delta, .. } => {
+                let _ = self.try_transition(SessionPhase::AssistantStreaming);
                 self.pending_parts.push(Part::TextDelta {
                     delta: delta.clone(),
                 });
                 true
             }
             Event::TextFinal { text, .. } => {
+                let _ = self.try_transition(SessionPhase::AssistantStreaming);
                 self.pending_parts.push(Part::TextFinal {
                     text: text.clone(),
                 });
@@ -218,6 +220,10 @@ impl SessionState {
                 call_id,
                 input,
             } => {
+                if self.phase == SessionPhase::AssistantStreaming {
+                    let _ = self.try_transition(SessionPhase::ToolProposed);
+                }
+                let _ = self.try_transition(SessionPhase::ToolRunning);
                 self.pending_parts.push(Part::ToolCall {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -235,6 +241,7 @@ impl SessionState {
                 call_id,
                 output,
             } => {
+                let _ = self.try_transition(SessionPhase::ToolResult);
                 self.pending_parts.push(Part::ToolResult {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -248,6 +255,7 @@ impl SessionState {
                 call_id,
                 error,
             } => {
+                let _ = self.try_transition(SessionPhase::ToolResult);
                 self.pending_parts.push(Part::ToolError {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -257,6 +265,7 @@ impl SessionState {
                 true
             }
             Event::StepFinish { tokens, .. } => {
+                let _ = self.try_transition(SessionPhase::AssistantFinalize);
                 self.pending_parts.push(Part::TokenUsage {
                     usage: tokens.clone(),
                 });
@@ -471,6 +480,72 @@ mod tests {
         assert!(state.apply_event(&result));
         assert_eq!(state.tool_calls[0].status, ToolCallStatus::Completed);
         assert_eq!(state.pending_parts.len(), 2);
+    }
+
+    #[test]
+    fn session_state_apply_event_advances_phase_for_text_delta() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_model_thinking();
+
+        let event = Event::TextDelta {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            delta: "hi".to_string(),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.phase, SessionPhase::AssistantStreaming);
+    }
+
+    #[test]
+    fn session_state_apply_event_advances_phase_for_tool_start() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_assistant_streaming();
+
+        let event = Event::ToolStart {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            input: serde_json::json!({"path": "file.txt"}),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.phase, SessionPhase::ToolRunning);
+    }
+
+    #[test]
+    fn session_state_apply_event_advances_phase_for_tool_result() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_tool_running();
+
+        let event = Event::ToolResult {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            output: ToolOutput::text("ok"),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.phase, SessionPhase::ToolResult);
+    }
+
+    #[test]
+    fn session_state_apply_event_advances_phase_for_step_finish() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_tool_result();
+
+        let event = Event::StepFinish {
+            session_id: "s1".to_string(),
+            tokens: TokenUsage {
+                input: 1,
+                output: 2,
+                reasoning: 3,
+                cache_read: 4,
+                cache_write: 5,
+            },
+            cost: 0.01,
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.phase, SessionPhase::AssistantFinalize);
     }
 
     #[test]
