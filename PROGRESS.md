@@ -1268,3 +1268,23 @@ un and into_node methods.
 - Next steps:
   - Emit SessionPhaseChanged from loop/session flows (hook apply_event_with_events).
   - Consider surfacing invalid transitions instead of ignoring.
+
+## 2026-01-21 18:03:47 Loop SessionPhase Emission (Phase 5)
+
+- Date: 2026-01-21 18:03:47
+- Scope: Phase 5 loop event emission
+- Summary: Loop SessionState sink now emits phase change events during ingestion.
+- Changes:
+  - SessionStateSink emits `SessionPhaseChanged` events returned by `apply_event_with_events`.
+  - Added TDD coverage to assert phase change events are emitted in LoopNode flows.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Invalid transitions still ignored (no explicit error events).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\\cargo.exe test`
+- Next steps:
+  - Emit explicit errors on invalid transitions.
+  - Use phase transition events in audit/replay pipeline.

@@ -227,8 +227,15 @@ impl SessionStateSink {
 
 impl EventSink for SessionStateSink {
     fn emit(&self, event: Event) {
-        self.session_state.lock().unwrap().apply_event(&event);
+        let phase_events = {
+            let mut state = self.session_state.lock().unwrap();
+            let (_handled, phase_events) = state.apply_event_with_events(&event);
+            phase_events
+        };
         self.inner.emit(event);
+        for phase_event in phase_events {
+            self.inner.emit(phase_event);
+        }
     }
 }
 
@@ -460,6 +467,38 @@ mod tests {
         assert_eq!(session_state.pending_parts.len(), 3);
         assert_eq!(session_state.tool_calls.len(), 1);
         assert_eq!(session_state.tool_calls[0].status, ToolCallStatus::Completed);
+    }
+
+    #[test]
+    fn loop_node_emits_phase_change_events() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
+        session_state.lock().unwrap().mark_model_thinking();
+
+        let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
+            ctx.emit(Event::TextDelta {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                delta: "hi".to_string(),
+            });
+            Ok(state)
+        });
+
+        let result = block_on(node.run_with_session_state(
+            LoopState::default(),
+            Arc::clone(&session_state),
+            sink,
+        ));
+        assert!(result.is_ok());
+
+        let captured = events.lock().unwrap();
+        assert!(captured.iter().any(|event| matches!(
+            event,
+            Event::SessionPhaseChanged { from, to, .. }
+                if *from == crate::runtime::session_state::SessionPhase::ModelThinking
+                    && *to == crate::runtime::session_state::SessionPhase::AssistantStreaming
+        )));
     }
 
     #[test]
