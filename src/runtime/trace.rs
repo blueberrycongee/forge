@@ -44,6 +44,8 @@ impl ExecutionTrace {
 pub struct TraceReplay;
 
 impl TraceReplay {
+    const RECORD_LOG_VERSION: u32 = 1;
+
     pub fn replay(trace: &ExecutionTrace) -> Vec<TraceEvent> {
         trace.events.clone()
     }
@@ -135,7 +137,10 @@ impl TraceReplay {
         trace: &ExecutionTrace,
         path: impl AsRef<std::path::Path>,
     ) -> std::io::Result<()> {
-        let json = Self::replay_to_record_json(trace);
+        let json = serde_json::json!({
+            "version": Self::RECORD_LOG_VERSION,
+            "records": Self::replay_to_record_json(trace),
+        });
         let data = serde_json::to_string_pretty(&json)
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
         if let Some(parent) = path.as_ref().parent() {
@@ -149,10 +154,49 @@ impl TraceReplay {
         path: impl AsRef<std::path::Path>,
     ) -> std::io::Result<Vec<crate::runtime::event::EventRecord>> {
         let contents = std::fs::read_to_string(path)?;
-        let records: Vec<crate::runtime::event::EventRecord> =
-            serde_json::from_str(&contents)
-                .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
-        Ok(records)
+        let value: serde_json::Value = serde_json::from_str(&contents)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        match value {
+            serde_json::Value::Array(_) => {
+                let records: Vec<crate::runtime::event::EventRecord> =
+                    serde_json::from_value(value).map_err(|err| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidData, err)
+                    })?;
+                Ok(records)
+            }
+            serde_json::Value::Object(mut obj) => {
+                let version = obj
+                    .remove("version")
+                    .and_then(|value| value.as_u64())
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "missing record log version",
+                        )
+                    })?;
+                if version != Self::RECORD_LOG_VERSION as u64 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "unsupported record log version",
+                    ));
+                }
+                let records_value = obj.remove("records").ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "missing record log records",
+                    )
+                })?;
+                let records: Vec<crate::runtime::event::EventRecord> =
+                    serde_json::from_value(records_value).map_err(|err| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidData, err)
+                    })?;
+                Ok(records)
+            }
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid record log format",
+            )),
+        }
     }
 }
 
@@ -438,5 +482,40 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert!(matches!(records[0].event, Event::StepStart { .. }));
         assert!(!records[0].meta.event_id.is_empty());
+    }
+
+    #[test]
+    fn trace_replay_read_audit_log_records_supports_legacy_array() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        let path = std::env::temp_dir().join(format!(
+            "forge-audit-records-legacy-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        let legacy = TraceReplay::replay_to_record_json(&trace);
+        std::fs::write(&path, serde_json::to_string_pretty(&legacy).expect("serialize")).expect("write");
+
+        let records = TraceReplay::read_audit_log_records(&path).expect("read");
+
+        assert_eq!(records.len(), 1);
+        assert!(matches!(records[0].event, Event::StepStart { .. }));
+    }
+
+    #[test]
+    fn trace_replay_read_audit_log_records_rejects_unknown_version() {
+        let path = std::env::temp_dir().join(format!(
+            "forge-audit-records-badver-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        let value = serde_json::json!({
+            "version": 2,
+            "records": []
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&value).expect("serialize")).expect("write");
+
+        let err = TraceReplay::read_audit_log_records(&path).expect_err("error");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }

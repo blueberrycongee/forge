@@ -1561,3 +1561,24 @@ un and into_node methods.
 - Next steps:
   - Add schema/version checks for persisted record logs.
   - Integrate record loading into platform adapters.
+
+## 2026-01-21 23:58:52 Record Log Versioning (Phase 5)
+
+- Date: 2026-01-21 23:58:52
+- Scope: Phase 5 record log schema validation
+- Summary: Added versioned record logs with backward-compatible reader.
+- Changes:
+  - `write_audit_log_records` now emits `{version, records}`.
+  - `read_audit_log_records` accepts legacy arrays and validates version.
+  - Added TDD coverage for legacy support and invalid version rejection.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - No schema migration for future versions.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Define migration path for future record log versions.
+  - Integrate record log reader into platform adapters.
