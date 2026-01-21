@@ -2,6 +2,7 @@
 
 use crate::runtime::event::{Event, EventSink};
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
+use crate::runtime::message::MessageRole;
 use crate::runtime::permission::{
     PermissionDecision,
     PermissionGate,
@@ -174,6 +175,25 @@ impl<S: GraphState> LoopNode<S> {
     ) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
         let sink: Arc<dyn EventSink> = Arc::new(SessionStateSink::new(sink, session_state));
         self.run(state, sink)
+    }
+
+    pub fn run_with_session_state_and_finalize(
+        &self,
+        state: S,
+        session_state: Arc<Mutex<SessionState>>,
+        sink: Arc<dyn EventSink>,
+        role: MessageRole,
+    ) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
+        let sink: Arc<dyn EventSink> = Arc::new(SessionStateSink::new(
+            sink,
+            Arc::clone(&session_state),
+        ));
+        let fut = self.run(state, sink);
+        Box::pin(async move {
+            let result = fut.await?;
+            session_state.lock().unwrap().finalize_message(role);
+            Ok(result)
+        })
     }
 
     pub fn into_node(self) -> NodeSpec<S> {
@@ -440,5 +460,60 @@ mod tests {
         assert_eq!(session_state.pending_parts.len(), 3);
         assert_eq!(session_state.tool_calls.len(), 1);
         assert_eq!(session_state.tool_calls[0].status, ToolCallStatus::Completed);
+    }
+
+    #[test]
+    fn loop_node_finalizes_session_state_message_after_run() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
+
+        let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
+            ctx.emit(Event::TextDelta {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                delta: "he".to_string(),
+            });
+            ctx.emit(Event::TextFinal {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                text: "llo".to_string(),
+            });
+            Ok(state)
+        });
+
+        let result = block_on(node.run_with_session_state_and_finalize(
+            LoopState::default(),
+            Arc::clone(&session_state),
+            sink,
+            MessageRole::Assistant,
+        ));
+        assert!(result.is_ok());
+
+        let session_state = session_state.lock().unwrap();
+        assert!(session_state.pending_parts.is_empty());
+        assert_eq!(session_state.messages.len(), 1);
+        assert_eq!(session_state.messages[0].role, MessageRole::Assistant);
+        assert_eq!(session_state.messages[0].parts.len(), 2);
+    }
+
+    #[test]
+    fn loop_node_finalize_noop_when_no_pending_parts() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
+
+        let node = LoopNode::new("loop", |state: LoopState, _ctx| async move { Ok(state) });
+
+        let result = block_on(node.run_with_session_state_and_finalize(
+            LoopState::default(),
+            Arc::clone(&session_state),
+            sink,
+            MessageRole::Assistant,
+        ));
+        assert!(result.is_ok());
+
+        let session_state = session_state.lock().unwrap();
+        assert!(session_state.messages.is_empty());
     }
 }

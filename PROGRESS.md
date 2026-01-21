@@ -1142,3 +1142,23 @@ un and into_node methods.
 - Next steps:
   - Wire SessionState finalize flow (pending_parts -> messages) in loop execution.
   - Add session state restoration into loop/session manager flows.
+
+## 2026-01-21 17:07:52 LoopNode SessionState Finalize (Phase 5)
+
+- Date: 2026-01-21 17:07:52
+- Scope: Phase 5 loop finalize integration
+- Summary: Added LoopNode helper to finalize SessionState pending parts after execution.
+- Changes:
+  - Added `LoopNode::run_with_session_state_and_finalize` to finalize pending parts into a Message.
+  - Added SessionState finalize tests for message creation and no-op when empty.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Finalization role is provided by caller; no automatic role inference yet.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add session state restoration into loop/session manager flows.
+  - Consider automatic role selection or per-event role tracking.
