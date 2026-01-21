@@ -1310,3 +1310,23 @@ un and into_node methods.
 - Next steps:
   - Emit rejection events from SessionStateSink in loop flows.
   - Decide whether invalid transitions should hard-fail execution.
+
+## 2026-01-21 21:36:49 Loop Phase Rejection Emission (Phase 5)
+
+- Date: 2026-01-21 21:36:49
+- Scope: Phase 5 loop event propagation
+- Summary: Loop SessionState sink now emits phase rejection events as well.
+- Changes:
+  - SessionStateSink forwards `SessionPhaseTransitionRejected` events.
+  - Added TDD coverage for rejection event emission in LoopNode.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Invalid transitions still do not hard-fail; only emit rejection events.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\\cargo.exe test`
+- Next steps:
+  - Decide whether rejection events should interrupt execution.
+  - Propagate transition events into audit/replay pipeline.

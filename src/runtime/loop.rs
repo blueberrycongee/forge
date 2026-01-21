@@ -502,6 +502,37 @@ mod tests {
     }
 
     #[test]
+    fn loop_node_emits_phase_rejection_events() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
+
+        let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
+            ctx.emit(Event::ToolStart {
+                tool: "read".to_string(),
+                call_id: "c1".to_string(),
+                input: serde_json::json!({"path": "file.txt"}),
+            });
+            Ok(state)
+        });
+
+        let result = block_on(node.run_with_session_state(
+            LoopState::default(),
+            Arc::clone(&session_state),
+            sink,
+        ));
+        assert!(result.is_ok());
+
+        let captured = events.lock().unwrap();
+        assert!(captured.iter().any(|event| matches!(
+            event,
+            Event::SessionPhaseTransitionRejected { from, to, .. }
+                if *from == crate::runtime::session_state::SessionPhase::UserInput
+                    && *to == crate::runtime::session_state::SessionPhase::ToolRunning
+        )));
+    }
+
+    #[test]
     fn loop_node_finalizes_session_state_message_after_run() {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
