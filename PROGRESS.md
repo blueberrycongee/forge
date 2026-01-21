@@ -1643,6 +1643,27 @@ un and into_node methods.
   - Decide whether permission events should also set SessionRouting::Interrupt.
   - Propagate permission phase events to adapters (CLI/SSE/IDE).
 
+## 2026-01-22 00:25:51 Permission Routing Updates (Phase 5)
+
+- Date: 2026-01-22 00:25:51
+- Scope: Phase 5 routing semantics
+- Summary: Permission events now update routing to interrupt/resume flow.
+- Changes:
+  - `PermissionAsked` sets `SessionRouting::Interrupt`.
+  - `PermissionReplied` restores `SessionRouting::Next`.
+  - Added TDD coverage for routing transitions.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Interrupt reason uses `permission:{name}` (pattern list not included).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide if interrupt reason should include patterns or tool context.
+  - Propagate routing changes to adapters (CLI/SSE/IDE).
+
 ## 2026-01-22 00:10:23 Plan Update for Event Protocol (Phase 5)
 
 - Date: 2026-01-22 00:10:23

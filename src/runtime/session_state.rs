@@ -321,11 +321,13 @@ impl SessionState {
                 });
                 (true, events)
             }
-            Event::PermissionAsked { .. } => {
+            Event::PermissionAsked { permission, .. } => {
+                self.route_interrupt(format!("permission:{}", permission));
                 push_transition(self, SessionPhase::Interrupted, &mut events);
                 (true, events)
             }
             Event::PermissionReplied { .. } => {
+                self.route_next();
                 push_transition(self, SessionPhase::Resumed, &mut events);
                 (true, events)
             }
@@ -659,6 +661,36 @@ mod tests {
 
         assert!(state.apply_event(&event));
         assert_eq!(state.phase, SessionPhase::Resumed);
+    }
+
+    #[test]
+    fn session_state_apply_event_routes_on_permission_asked() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::PermissionAsked {
+            permission: "fs.read".to_string(),
+            patterns: vec!["*".to_string()],
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.routing,
+            SessionRouting::Interrupt {
+                reason: "permission:fs.read".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn session_state_apply_event_routes_on_permission_replied() {
+        let mut state = SessionState::new("s1", "m1");
+        state.route_interrupt("permission:fs.read");
+        let event = Event::PermissionReplied {
+            permission: "fs.read".to_string(),
+            reply: crate::runtime::event::PermissionReply::Once,
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.routing, SessionRouting::Next);
     }
 
     #[test]
