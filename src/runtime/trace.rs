@@ -99,6 +99,16 @@ impl TraceReplay {
         }
     }
 
+    pub fn replay_to_record_sink_with_record_log(
+        trace: &ExecutionTrace,
+        sink: &dyn crate::runtime::event::EventRecordSink,
+        path: impl AsRef<std::path::Path>,
+    ) -> std::io::Result<()> {
+        let existing = Self::read_audit_log_records(path)?;
+        Self::replay_to_record_sink_with_existing(trace, sink, &existing);
+        Ok(())
+    }
+
     pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
         let mut events = Vec::new();
         for event in &trace.events {
@@ -517,5 +527,30 @@ mod tests {
 
         let err = TraceReplay::read_audit_log_records(&path).expect_err("error");
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn trace_replay_records_with_record_log_file() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        let path = std::env::temp_dir().join(format!(
+            "forge-audit-records-replay-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        TraceReplay::write_audit_log_records(&trace, &path).expect("write");
+
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let sink = CaptureRecordSink {
+            records: Arc::clone(&records),
+        };
+
+        TraceReplay::replay_to_record_sink_with_record_log(&trace, &sink, &path)
+            .expect("replay");
+
+        let captured = records.lock().unwrap();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].meta.seq, 2);
     }
 }

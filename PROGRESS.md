@@ -1582,3 +1582,23 @@ un and into_node methods.
 - Next steps:
   - Define migration path for future record log versions.
   - Integrate record log reader into platform adapters.
+
+## 2026-01-22 00:00:31 Replay With Record Log File (Phase 5)
+
+- Date: 2026-01-22 00:00:31
+- Scope: Phase 5 replay continuity
+- Summary: Added replay helper that reads record log file and offsets sequencing.
+- Changes:
+  - Added `TraceReplay::replay_to_record_sink_with_record_log`.
+  - Added TDD coverage to confirm seq offsets from record log file.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Record log path must be provided by caller.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate replay helper into platform adapters (CLI/SSE/IDE).
+  - Decide default record log location.
