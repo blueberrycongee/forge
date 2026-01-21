@@ -70,13 +70,24 @@ impl TraceReplay {
         }
     }
 
-pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
+    pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
         let mut events = Vec::new();
         for event in &trace.events {
             let runtime_event = map_trace_event(event);
             events.push(serde_json::to_value(runtime_event).expect("serialize"));
         }
         serde_json::Value::Array(events)
+    }
+
+    pub fn replay_to_record_json(trace: &ExecutionTrace) -> serde_json::Value {
+        let sequencer = crate::runtime::event::EventSequencer::new();
+        let mut records = Vec::new();
+        for event in &trace.events {
+            let runtime_event = map_trace_event(event);
+            let record = sequencer.record(runtime_event);
+            records.push(serde_json::to_value(record).expect("serialize"));
+        }
+        serde_json::Value::Array(records)
     }
 
     pub fn write_audit_log(
@@ -245,6 +256,26 @@ mod tests {
         let json = TraceReplay::replay_to_json(&trace);
         assert!(json.is_array());
         assert_eq!(json.as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn trace_replay_to_record_json_emits_array_with_metadata() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        trace.record_event(TraceEvent::NodeFinish {
+            node: "a".to_string(),
+        });
+
+        let json = TraceReplay::replay_to_record_json(&trace);
+        let array = json.as_array().expect("array");
+        assert_eq!(array.len(), 2);
+        assert!(array[0].get("meta").is_some());
+        assert!(array[0]["meta"].get("event_id").is_some());
+        assert!(array[0]["meta"].get("timestamp_ms").is_some());
+        assert!(array[0]["meta"].get("seq").is_some());
+        assert!(array[1]["meta"]["seq"].as_u64().unwrap() > array[0]["meta"]["seq"].as_u64().unwrap());
     }
 
     #[test]

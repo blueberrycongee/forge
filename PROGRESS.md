@@ -1401,3 +1401,23 @@ un and into_node methods.
 - Next steps:
   - Decide whether trace replay should preserve original seq/timestamps.
   - Expose trace replay record sink through platform adapters.
+
+## 2026-01-21 22:34:12 Trace Replay Record JSON (Phase 5)
+
+- Date: 2026-01-21 22:34:12
+- Scope: Phase 5 protocol metadata JSON output
+- Summary: Added trace replay JSON output with EventRecord metadata.
+- Changes:
+  - Added `TraceReplay::replay_to_record_json` for metadata-rich JSON output.
+  - Added TDD coverage to assert metadata fields and seq ordering.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Record JSON uses fresh sequencing (not persisted).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide whether JSON output should include original seq/timestamps.
+  - Expose record JSON output to platform adapters (CLI/SSE/IDE).
