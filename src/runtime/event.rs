@@ -3,8 +3,9 @@
 //! This is the foundation for OpenCode-style runtime events
 //! (text/tool/step/permission) so clients can consume a single stream.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::runtime::session_state::SessionPhase;
@@ -64,6 +65,18 @@ impl EventRecord {
     pub fn with_meta(event: Event, meta: EventMeta) -> Self {
         Self { meta, event }
     }
+
+    pub fn cmp_meta(a: &Self, b: &Self) -> Ordering {
+        a.meta
+            .seq
+            .cmp(&b.meta.seq)
+            .then_with(|| a.meta.timestamp_ms.cmp(&b.meta.timestamp_ms))
+            .then_with(|| a.meta.event_id.cmp(&b.meta.event_id))
+    }
+}
+
+pub fn sort_records_by_meta(records: &mut [EventRecord]) {
+    records.sort_by(EventRecord::cmp_meta);
 }
 
 /// Sequencer for assigning event ids, timestamps, and sequence numbers.
@@ -78,7 +91,7 @@ impl EventSequencer {
     }
 
     pub fn record(&self, event: Event) -> EventRecord {
-        let seq = self.next_seq.fetch_add(1, Ordering::Relaxed) + 1;
+        let seq = self.next_seq.fetch_add(1, AtomicOrdering::Relaxed) + 1;
         EventRecord::new(event, seq)
     }
 }
@@ -173,7 +186,7 @@ pub enum Event {
 
 #[cfg(test)]
 mod tests {
-    use super::{Event, EventMeta, EventRecord, EventSequencer, TokenUsage};
+    use super::{sort_records_by_meta, Event, EventMeta, EventRecord, EventSequencer, TokenUsage};
     use crate::runtime::tool::ToolState;
 
     #[test]
@@ -226,6 +239,78 @@ mod tests {
 
         assert_eq!(record.meta, meta);
         assert!(matches!(record.event, Event::StepStart { .. }));
+    }
+
+    #[test]
+    fn event_record_cmp_orders_by_seq_then_timestamp_then_id() {
+        let base = Event::StepStart {
+            session_id: "s1".to_string(),
+        };
+        let record_a = EventRecord::with_meta(
+            base.clone(),
+            EventMeta {
+                event_id: "a".to_string(),
+                timestamp_ms: 10,
+                seq: 1,
+            },
+        );
+        let record_b = EventRecord::with_meta(
+            base.clone(),
+            EventMeta {
+                event_id: "b".to_string(),
+                timestamp_ms: 20,
+                seq: 1,
+            },
+        );
+        let record_c = EventRecord::with_meta(
+            base,
+            EventMeta {
+                event_id: "c".to_string(),
+                timestamp_ms: 5,
+                seq: 2,
+            },
+        );
+
+        assert!(EventRecord::cmp_meta(&record_a, &record_b).is_lt());
+        assert!(EventRecord::cmp_meta(&record_b, &record_c).is_lt());
+    }
+
+    #[test]
+    fn sort_records_by_meta_orders_records() {
+        let base = Event::StepStart {
+            session_id: "s1".to_string(),
+        };
+        let mut records = vec![
+            EventRecord::with_meta(
+                base.clone(),
+                EventMeta {
+                    event_id: "b".to_string(),
+                    timestamp_ms: 10,
+                    seq: 1,
+                },
+            ),
+            EventRecord::with_meta(
+                base.clone(),
+                EventMeta {
+                    event_id: "a".to_string(),
+                    timestamp_ms: 10,
+                    seq: 1,
+                },
+            ),
+            EventRecord::with_meta(
+                base,
+                EventMeta {
+                    event_id: "c".to_string(),
+                    timestamp_ms: 5,
+                    seq: 0,
+                },
+            ),
+        ];
+
+        sort_records_by_meta(&mut records);
+
+        let ids: Vec<&str> = records.iter().map(|record| record.meta.event_id.as_str()).collect();
+        assert_eq!(ids, vec!["c", "a", "b"]);
     }
 }
 

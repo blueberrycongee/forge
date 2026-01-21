@@ -1441,3 +1441,23 @@ un and into_node methods.
 - Next steps:
   - Decide whether audit log should preserve original seq/timestamps.
   - Expose record audit log to platform adapters (CLI/SSE/IDE).
+
+## 2026-01-21 22:38:02 Event Record Ordering Helper (Phase 5)
+
+- Date: 2026-01-21 22:38:02
+- Scope: Phase 5 replay ordering semantics
+- Summary: Added helper to order EventRecords by seq/timestamp/event_id.
+- Changes:
+  - Added `EventRecord::cmp_meta` ordering and `sort_records_by_meta`.
+  - Added TDD coverage for comparator and sorting behavior.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Ordering helper not yet applied in platform adapters.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide where ordering should be enforced (event stream vs replay).
+  - Integrate ordering helper into SSE/CLI/IDE record outputs.
