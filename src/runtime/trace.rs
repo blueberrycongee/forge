@@ -83,6 +83,20 @@ impl TraceReplay {
         }
     }
 
+    pub fn replay_to_record_sink_with_existing(
+        trace: &ExecutionTrace,
+        sink: &dyn crate::runtime::event::EventRecordSink,
+        existing: &[crate::runtime::event::EventRecord],
+    ) {
+        let start_seq = crate::runtime::event::max_record_seq(existing).unwrap_or(0);
+        let sequencer = crate::runtime::event::EventSequencer::with_start_seq(start_seq);
+        for event in &trace.events {
+            let runtime_event = map_trace_event(event);
+            let record = sequencer.record(runtime_event);
+            sink.emit_record(record);
+        }
+    }
+
     pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
         let mut events = Vec::new();
         for event in &trace.events {
@@ -291,6 +305,48 @@ mod tests {
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 1);
         assert_eq!(captured[0].meta.seq, 100);
+    }
+
+    #[test]
+    fn trace_replay_records_with_existing_offset() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+
+        let existing = vec![
+            EventRecord::with_meta(
+                Event::StepStart {
+                    session_id: "s1".to_string(),
+                },
+                crate::runtime::event::EventMeta {
+                    event_id: "e1".to_string(),
+                    timestamp_ms: 1,
+                    seq: 7,
+                },
+            ),
+            EventRecord::with_meta(
+                Event::StepStart {
+                    session_id: "s1".to_string(),
+                },
+                crate::runtime::event::EventMeta {
+                    event_id: "e2".to_string(),
+                    timestamp_ms: 2,
+                    seq: 9,
+                },
+            ),
+        ];
+
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let sink = CaptureRecordSink {
+            records: Arc::clone(&records),
+        };
+
+        TraceReplay::replay_to_record_sink_with_existing(&trace, &sink, &existing);
+
+        let captured = records.lock().unwrap();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].meta.seq, 10);
     }
 
     #[test]

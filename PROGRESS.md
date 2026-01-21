@@ -1521,3 +1521,23 @@ un and into_node methods.
 - Next steps:
   - Feed `max_record_seq` into replay offset automatically.
   - Expose offset replay in platform adapters (CLI/SSE/IDE).
+
+## 2026-01-21 23:55:20 Trace Replay Existing Offset (Phase 5)
+
+- Date: 2026-01-21 23:55:20
+- Scope: Phase 5 replay continuity
+- Summary: Added replay helper that offsets sequencing using existing records.
+- Changes:
+  - Added `TraceReplay::replay_to_record_sink_with_existing`.
+  - Added TDD coverage for existing offset behavior (uses max seq).
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Existing records must be provided by caller; no auto fetch.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Integrate with platform adapters to auto-supply existing records.
+  - Decide storage format for persisted EventRecords.
