@@ -4,6 +4,8 @@
 //! (text/tool/step/permission) so clients can consume a single stream.
 
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::runtime::session_state::SessionPhase;
 use crate::runtime::tool::{ToolOutput, ToolState};
@@ -24,6 +26,68 @@ pub enum PermissionReply {
     Once,
     Always,
     Reject,
+}
+
+/// Event metadata for protocol-level fields.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EventMeta {
+    pub event_id: String,
+    pub timestamp_ms: u64,
+    pub seq: u64,
+}
+
+impl EventMeta {
+    pub fn new(seq: u64) -> Self {
+        Self {
+            event_id: uuid::Uuid::new_v4().to_string(),
+            timestamp_ms: now_ms(),
+            seq,
+        }
+    }
+}
+
+/// Event record with protocol metadata.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EventRecord {
+    pub meta: EventMeta,
+    pub event: Event,
+}
+
+impl EventRecord {
+    pub fn new(event: Event, seq: u64) -> Self {
+        Self {
+            meta: EventMeta::new(seq),
+            event,
+        }
+    }
+
+    pub fn with_meta(event: Event, meta: EventMeta) -> Self {
+        Self { meta, event }
+    }
+}
+
+/// Sequencer for assigning event ids, timestamps, and sequence numbers.
+#[derive(Debug, Default)]
+pub struct EventSequencer {
+    next_seq: AtomicU64,
+}
+
+impl EventSequencer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn record(&self, event: Event) -> EventRecord {
+        let seq = self.next_seq.fetch_add(1, Ordering::Relaxed) + 1;
+        EventRecord::new(event, seq)
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 /// Runtime events emitted during execution.
@@ -109,7 +173,7 @@ pub enum Event {
 
 #[cfg(test)]
 mod tests {
-    use super::Event;
+    use super::{Event, EventMeta, EventRecord, EventSequencer, TokenUsage};
     use crate::runtime::tool::ToolState;
 
     #[test]
@@ -124,6 +188,44 @@ mod tests {
             Event::ToolStatus { state, .. } => assert_eq!(state, ToolState::Running),
             _ => panic!("expected tool status event"),
         }
+    }
+
+    #[test]
+    fn event_sequencer_assigns_metadata() {
+        let sequencer = EventSequencer::default();
+
+        let first = sequencer.record(Event::StepStart {
+            session_id: "s1".to_string(),
+        });
+        let second = sequencer.record(Event::StepFinish {
+            session_id: "s1".to_string(),
+            tokens: TokenUsage::default(),
+            cost: 0.0,
+        });
+
+        assert!(!first.meta.event_id.is_empty());
+        assert!(!second.meta.event_id.is_empty());
+        assert_ne!(first.meta.event_id, second.meta.event_id);
+        assert!(first.meta.seq < second.meta.seq);
+        assert!(first.meta.timestamp_ms > 0);
+    }
+
+    #[test]
+    fn event_record_holds_meta_and_payload() {
+        let meta = EventMeta {
+            event_id: "e1".to_string(),
+            timestamp_ms: 42,
+            seq: 7,
+        };
+        let record = EventRecord::with_meta(
+            Event::StepStart {
+                session_id: "s1".to_string(),
+            },
+            meta.clone(),
+        );
+
+        assert_eq!(record.meta, meta);
+        assert!(matches!(record.event, Event::StepStart { .. }));
     }
 }
 

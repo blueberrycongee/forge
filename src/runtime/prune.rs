@@ -1,6 +1,6 @@
 ﻿//! Prune policy for trimming old tool events.
 
-use crate::runtime::event::Event;
+use crate::runtime::event::{Event, EventRecord};
 
 /// Prune policy for tool events.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -25,15 +25,15 @@ pub struct PruneResult {
 }
 
 /// Prune old tool events in-place, keeping the most recent N tool events.
-pub fn prune_tool_events(events: &mut Vec<Event>, policy: &PrunePolicy) -> PruneResult {
+pub fn prune_tool_events(events: &mut Vec<EventRecord>, policy: &PrunePolicy) -> PruneResult {
     if !policy.enabled {
         return PruneResult { pruned: 0 };
     }
 
     let mut keep_tool_indices = std::collections::HashSet::new();
     let mut seen = 0usize;
-    for (idx, event) in events.iter().enumerate().rev() {
-        if is_tool_event(event) {
+    for (idx, record) in events.iter().enumerate().rev() {
+        if is_tool_event(&record.event) {
             seen += 1;
             if seen <= policy.keep_tool_events {
                 keep_tool_indices.insert(idx);
@@ -42,8 +42,8 @@ pub fn prune_tool_events(events: &mut Vec<Event>, policy: &PrunePolicy) -> Prune
     }
 
     let before = events.len();
-    events.retain_with_index(|idx, event| {
-        if !is_tool_event(event) {
+    events.retain_with_index(|idx, record| {
+        if !is_tool_event(&record.event) {
             return true;
         }
         keep_tool_indices.contains(&idx)
@@ -92,7 +92,7 @@ impl<T> RetainWithIndex<T> for Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::{prune_tool_events, PrunePolicy};
-    use crate::runtime::event::{Event, TokenUsage};
+    use crate::runtime::event::{Event, EventSequencer, TokenUsage};
     use crate::runtime::tool::ToolOutput;
 
     fn make_tool_start(call_id: &str) -> Event {
@@ -113,33 +113,38 @@ mod tests {
 
     #[test]
     fn prune_keeps_recent_tool_events() {
+        let sequencer = EventSequencer::default();
         let mut events = vec![
-            make_tool_start("1"),
-            make_tool_result("1"),
-            Event::TextDelta {
+            sequencer.record(make_tool_start("1")),
+            sequencer.record(make_tool_result("1")),
+            sequencer.record(Event::TextDelta {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hello".to_string(),
-            },
-            make_tool_start("2"),
-            make_tool_result("2"),
-            Event::StepFinish {
+            }),
+            sequencer.record(make_tool_start("2")),
+            sequencer.record(make_tool_result("2")),
+            sequencer.record(Event::StepFinish {
                 session_id: "s1".to_string(),
                 tokens: TokenUsage::default(),
                 cost: 0.0,
-            },
+            }),
         ];
 
         let result = prune_tool_events(&mut events, &PrunePolicy::new(2));
         assert_eq!(result.pruned, 2);
         assert_eq!(events.len(), 4);
-        assert!(events.iter().any(|event| matches!(event, Event::TextDelta { .. })));
-        assert!(events.iter().any(|event| matches!(event, Event::StepFinish { .. })));
+        assert!(events.iter().any(|record| matches!(record.event, Event::TextDelta { .. })));
+        assert!(events.iter().any(|record| matches!(record.event, Event::StepFinish { .. })));
     }
 
     #[test]
     fn prune_disabled_keeps_all() {
-        let mut events = vec![make_tool_start("1"), make_tool_result("1")];
+        let sequencer = EventSequencer::default();
+        let mut events = vec![
+            sequencer.record(make_tool_start("1")),
+            sequencer.record(make_tool_result("1")),
+        ];
         let policy = PrunePolicy {
             enabled: false,
             keep_tool_events: 0,

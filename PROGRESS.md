@@ -1330,3 +1330,29 @@ un and into_node methods.
 - Next steps:
   - Decide whether rejection events should interrupt execution.
   - Propagate transition events into audit/replay pipeline.
+
+## 2026-01-21 22:24:42 Event Metadata Records (Phase 5)
+
+- Date: 2026-01-21 22:24:42
+- Scope: Phase 5 event protocol metadata (history)
+- Summary: Added event metadata records (event_id/timestamp/seq) for event history capture.
+- Changes:
+  - Added `EventMeta`, `EventRecord`, and `EventSequencer` in runtime events.
+  - RecordingSink now stores `EventRecord` with metadata for history buffers.
+  - Prune policy now operates on `EventRecord` while preserving tool event pruning.
+  - Added TDD coverage for sequencer metadata and record wrapper.
+  - Updated executor/prune tests to use history records.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\prune.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Metadata is captured only in history buffers; emitted events still lack event_id/timestamp/seq.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide how to attach metadata to the emitted Event stream (SSE/CLI/IDE).
+  - Add event_id/timestamp/seq to protocol output and replay ordering.

@@ -100,7 +100,16 @@ pub mod prelude {
     
     pub use crate::runtime::graph::StateGraph;
     pub use crate::runtime::executor::CompiledGraph;
-    pub use crate::runtime::event::{Event, EventSink, NoopEventSink, PermissionReply, TokenUsage};
+pub use crate::runtime::event::{
+    Event,
+    EventMeta,
+    EventRecord,
+    EventSequencer,
+    EventSink,
+    NoopEventSink,
+    PermissionReply,
+    TokenUsage,
+};
     pub use crate::runtime::message::{Message, MessageRole, Part};
     pub use crate::runtime::compaction::{CompactionPolicy, CompactionResult};
     pub use crate::runtime::prune::{PrunePolicy, PruneResult};

@@ -13,7 +13,7 @@ use crate::runtime::constants::{START, END, MAX_ITERATIONS};
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
 use crate::runtime::state::GraphState;
 use crate::runtime::graph::{StateGraph, Edge};
-use crate::runtime::event::{Event, EventSink};
+use crate::runtime::event::{Event, EventRecord, EventSequencer, EventSink};
 use crate::runtime::compaction::{
     CompactionContext,
     CompactionHook,
@@ -56,7 +56,7 @@ pub struct ExecutionConfig {
     /// Prune policy for event history
     pub prune_policy: PrunePolicy,
     /// Optional event history buffer
-    pub event_history: Option<Arc<std::sync::Mutex<Vec<Event>>>>,
+    pub event_history: Option<Arc<std::sync::Mutex<Vec<EventRecord>>>>,
     /// Optional trace collector
     pub trace: Option<Arc<std::sync::Mutex<ExecutionTrace>>>,
     /// Optional session snapshot collector
@@ -154,7 +154,10 @@ impl ExecutionConfig {
     }
 
     /// Attach an event history buffer for stream_events
-    pub fn with_event_history(mut self, history: Arc<std::sync::Mutex<Vec<Event>>>) -> Self {
+    pub fn with_event_history(
+        mut self,
+        history: Arc<std::sync::Mutex<Vec<EventRecord>>>,
+    ) -> Self {
         self.event_history = Some(history);
         self
     }
@@ -752,12 +755,13 @@ impl<S: GraphState> CompiledGraph<S> {
 
 struct RecordingSink {
     inner: Arc<dyn EventSink>,
-    history: Arc<std::sync::Mutex<Vec<Event>>>,
+    history: Arc<std::sync::Mutex<Vec<EventRecord>>>,
+    sequencer: EventSequencer,
 }
 
 fn resolve_message_count(
     snapshot: &Option<Arc<std::sync::Mutex<SessionSnapshot>>>,
-    history: &Arc<std::sync::Mutex<Vec<Event>>>,
+    history: &Arc<std::sync::Mutex<Vec<EventRecord>>>,
 ) -> usize {
     if let Some(snapshot) = snapshot {
         return snapshot.lock().unwrap().messages.len();
@@ -783,14 +787,19 @@ fn collect_compaction_messages(
 }
 
 impl RecordingSink {
-    fn new(inner: Arc<dyn EventSink>, history: Arc<std::sync::Mutex<Vec<Event>>>) -> Self {
-        Self { inner, history }
+    fn new(inner: Arc<dyn EventSink>, history: Arc<std::sync::Mutex<Vec<EventRecord>>>) -> Self {
+        Self {
+            inner,
+            history,
+            sequencer: EventSequencer::new(),
+        }
     }
 }
 
 impl EventSink for RecordingSink {
     fn emit(&self, event: Event) {
-        self.history.lock().unwrap().push(event.clone());
+        let record = self.sequencer.record(event.clone());
+        self.history.lock().unwrap().push(record);
         self.inner.emit(event);
     }
 }
@@ -1024,7 +1033,9 @@ mod tests {
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         let history = history.lock().unwrap();
-        assert!(history.iter().all(|event| !matches!(event, Event::ToolStart { .. })));
+        assert!(history
+            .iter()
+            .all(|record| !matches!(record.event, Event::ToolStart { .. })));
         assert!(events
             .lock()
             .unwrap()
@@ -1087,9 +1098,13 @@ mod tests {
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         let events = history.lock().unwrap();
-        assert!(events.iter().any(|event| matches!(event, Event::TextDelta { .. })));
-        assert!(!events.iter().any(|event| matches!(event, Event::ToolStart { call_id, .. } if call_id == "1")));
-        assert!(events.iter().any(|event| matches!(event, Event::ToolStart { call_id, .. } if call_id == "2")));
+        assert!(events.iter().any(|record| matches!(record.event, Event::TextDelta { .. })));
+        assert!(!events
+            .iter()
+            .any(|record| matches!(&record.event, Event::ToolStart { call_id, .. } if call_id == "1")));
+        assert!(events
+            .iter()
+            .any(|record| matches!(&record.event, Event::ToolStart { call_id, .. } if call_id == "2")));
     }
 
     #[test]
