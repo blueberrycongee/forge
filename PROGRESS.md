@@ -1380,3 +1380,24 @@ un and into_node methods.
 - Next steps:
   - Wire EventRecordSink into SSE/CLI/IDE adapters and event streaming output.
   - Define replay ordering guarantees using seq/timestamp.
+
+## 2026-01-21 22:32:44 Trace Replay Record Sink (Phase 5)
+
+- Date: 2026-01-21 22:32:44
+- Scope: Phase 5 trace replay metadata
+- Summary: Added trace replay path that emits EventRecord metadata with ordering.
+- Changes:
+  - Added `TraceReplay::replay_to_record_sink` using EventSequencer metadata.
+  - Reused trace→runtime Event mapping to avoid duplicate logic.
+  - Added TDD coverage for record sink emission ordering and metadata.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Record replay uses fresh sequencing (not persisted).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide whether trace replay should preserve original seq/timestamps.
+  - Expose trace replay record sink through platform adapters.

@@ -53,47 +53,27 @@ impl TraceReplay {
         sink: &dyn crate::runtime::event::EventSink,
     ) {
         for event in &trace.events {
-            let runtime_event = match event {
-                TraceEvent::NodeStart { node } => crate::runtime::event::Event::StepStart {
-                    session_id: node.clone(),
-                },
-                TraceEvent::NodeFinish { node } => crate::runtime::event::Event::StepFinish {
-                    session_id: node.clone(),
-                    tokens: crate::runtime::event::TokenUsage::default(),
-                    cost: 0.0,
-                },
-                TraceEvent::Compacted { summary, truncated_before } => {
-                    crate::runtime::event::Event::SessionCompacted {
-                        session_id: "replay".to_string(),
-                        summary: summary.clone(),
-                        truncated_before: *truncated_before,
-                    }
-                }
-            };
+            let runtime_event = map_trace_event(event);
             sink.emit(runtime_event);
         }
     }
 
-    pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
+    pub fn replay_to_record_sink(
+        trace: &ExecutionTrace,
+        sink: &dyn crate::runtime::event::EventRecordSink,
+    ) {
+        let sequencer = crate::runtime::event::EventSequencer::new();
+        for event in &trace.events {
+            let runtime_event = map_trace_event(event);
+            let record = sequencer.record(runtime_event);
+            sink.emit_record(record);
+        }
+    }
+
+pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
         let mut events = Vec::new();
         for event in &trace.events {
-            let runtime_event = match event {
-                TraceEvent::NodeStart { node } => crate::runtime::event::Event::StepStart {
-                    session_id: node.clone(),
-                },
-                TraceEvent::NodeFinish { node } => crate::runtime::event::Event::StepFinish {
-                    session_id: node.clone(),
-                    tokens: crate::runtime::event::TokenUsage::default(),
-                    cost: 0.0,
-                },
-                TraceEvent::Compacted { summary, truncated_before } => {
-                    crate::runtime::event::Event::SessionCompacted {
-                        session_id: "replay".to_string(),
-                        summary: summary.clone(),
-                        truncated_before: *truncated_before,
-                    }
-                }
-            };
+            let runtime_event = map_trace_event(event);
             events.push(serde_json::to_value(runtime_event).expect("serialize"));
         }
         serde_json::Value::Array(events)
@@ -114,10 +94,31 @@ impl TraceReplay {
     }
 }
 
+fn map_trace_event(event: &TraceEvent) -> crate::runtime::event::Event {
+    match event {
+        TraceEvent::NodeStart { node } => crate::runtime::event::Event::StepStart {
+            session_id: node.clone(),
+        },
+        TraceEvent::NodeFinish { node } => crate::runtime::event::Event::StepFinish {
+            session_id: node.clone(),
+            tokens: crate::runtime::event::TokenUsage::default(),
+            cost: 0.0,
+        },
+        TraceEvent::Compacted {
+            summary,
+            truncated_before,
+        } => crate::runtime::event::Event::SessionCompacted {
+            session_id: "replay".to_string(),
+            summary: summary.clone(),
+            truncated_before: *truncated_before,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
-    use crate::runtime::event::{Event, EventSink};
+    use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSink};
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -171,6 +172,17 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct CaptureRecordSink {
+        records: Arc<Mutex<Vec<EventRecord>>>,
+    }
+
+    impl EventRecordSink for CaptureRecordSink {
+        fn emit_record(&self, record: EventRecord) {
+            self.records.lock().unwrap().push(record);
+        }
+    }
+
     #[test]
     fn trace_replay_emits_events() {
         let mut trace = ExecutionTrace::new();
@@ -192,6 +204,36 @@ mod tests {
         let events = events.lock().unwrap();
         assert!(events.iter().any(|event| matches!(event, Event::StepStart { .. })));
         assert!(events.iter().any(|event| matches!(event, Event::SessionCompacted { .. })));
+    }
+
+    #[test]
+    fn trace_replay_emits_event_records_with_metadata() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        trace.record_event(TraceEvent::NodeFinish {
+            node: "a".to_string(),
+        });
+
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let sink = CaptureRecordSink {
+            records: Arc::clone(&records),
+        };
+
+        TraceReplay::replay_to_record_sink(&trace, &sink);
+
+        let captured = records.lock().unwrap();
+        assert_eq!(captured.len(), 2);
+        assert!(captured
+            .iter()
+            .all(|record| !record.meta.event_id.is_empty()));
+        assert!(captured
+            .iter()
+            .all(|record| record.meta.timestamp_ms > 0));
+        assert!(captured[0].meta.seq < captured[1].meta.seq);
+        assert!(matches!(captured[0].event, Event::StepStart { .. }));
+        assert!(matches!(captured[1].event, Event::StepFinish { .. }));
     }
 
     #[test]
