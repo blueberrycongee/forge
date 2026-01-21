@@ -81,6 +81,7 @@ pub mod permission;
 pub mod prune;
 pub mod tool;
 pub mod trace;
+pub mod output;
 pub mod session;
 pub mod session_state;
 pub mod r#loop;
@@ -116,6 +117,12 @@ pub use crate::runtime::event::{
     pub use crate::runtime::compaction::{CompactionPolicy, CompactionResult};
     pub use crate::runtime::prune::{PrunePolicy, PruneResult};
     pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
+    pub use crate::runtime::output::{
+        JsonLineEventRecordSink,
+        JsonLineEventSink,
+        SseEventRecordSink,
+        SseEventSink,
+    };
     pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
     pub use crate::runtime::session_state::{
         SessionPhase,

@@ -1664,6 +1664,29 @@ un and into_node methods.
   - Decide if interrupt reason should include patterns or tool context.
   - Propagate routing changes to adapters (CLI/SSE/IDE).
 
+## 2026-01-22 00:37:57 Event Output Adapters (Phase 5)
+
+- Date: 2026-01-22 00:37:57
+- Scope: Phase 5 event protocol outputs
+- Summary: Added JSONL and SSE output adapters for Event and EventRecord streams.
+- Changes:
+  - Added JSON Lines sinks for `Event` and `EventRecord`.
+  - Added SSE sinks for `Event` and `EventRecord`.
+  - Exported sinks via runtime prelude.
+  - Added TDD coverage for JSONL and SSE output formatting.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\output.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Output sinks do not flush or handle write errors.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide error handling/flush strategy for output sinks.
+  - Wire adapters into platform entry points (CLI/SSE server).
+
 ## 2026-01-22 00:10:23 Plan Update for Event Protocol (Phase 5)
 
 - Date: 2026-01-22 00:10:23
