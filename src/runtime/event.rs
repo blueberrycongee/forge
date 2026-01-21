@@ -98,6 +98,13 @@ pub enum Event {
         from: SessionPhase,
         to: SessionPhase,
     },
+    SessionPhaseTransitionRejected {
+        session_id: String,
+        message_id: String,
+        from: SessionPhase,
+        to: SessionPhase,
+        reason: String,
+    },
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-//! Session state model for runtime loop processing.
+﻿//! Session state model for runtime loop processing.
 
 use crate::runtime::message::{Message, Part};
 
@@ -233,24 +233,33 @@ impl SessionState {
     ) -> (bool, Vec<crate::runtime::event::Event>) {
         use crate::runtime::event::Event;
         let mut events = Vec::new();
-        match event {
-            Event::TextDelta { delta, .. } => {
-                if let Ok(Some(event)) =
-                    self.try_transition_with_event(SessionPhase::AssistantStreaming)
-                {
+        let push_transition = |state: &mut Self, next: SessionPhase, events: &mut Vec<Event>| {
+            match state.try_transition_with_event(next.clone()) {
+                Ok(Some(event)) => {
                     events.push(event);
                 }
+                Ok(None) => {}
+                Err(reason) => {
+                    events.push(Event::SessionPhaseTransitionRejected {
+                        session_id: state.session_id.clone(),
+                        message_id: state.message_id.clone(),
+                        from: state.phase.clone(),
+                        to: next,
+                        reason,
+                    });
+                }
+            }
+        };
+        match event {
+            Event::TextDelta { delta, .. } => {
+                push_transition(self, SessionPhase::AssistantStreaming, &mut events);
                 self.pending_parts.push(Part::TextDelta {
                     delta: delta.clone(),
                 });
                 (true, events)
             }
             Event::TextFinal { text, .. } => {
-                if let Ok(Some(event)) =
-                    self.try_transition_with_event(SessionPhase::AssistantStreaming)
-                {
-                    events.push(event);
-                }
+                push_transition(self, SessionPhase::AssistantStreaming, &mut events);
                 self.pending_parts.push(Part::TextFinal {
                     text: text.clone(),
                 });
@@ -262,17 +271,9 @@ impl SessionState {
                 input,
             } => {
                 if self.phase == SessionPhase::AssistantStreaming {
-                    if let Ok(Some(event)) =
-                        self.try_transition_with_event(SessionPhase::ToolProposed)
-                    {
-                        events.push(event);
-                    }
+                    push_transition(self, SessionPhase::ToolProposed, &mut events);
                 }
-                if let Ok(Some(event)) =
-                    self.try_transition_with_event(SessionPhase::ToolRunning)
-                {
-                    events.push(event);
-                }
+                push_transition(self, SessionPhase::ToolRunning, &mut events);
                 self.pending_parts.push(Part::ToolCall {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -290,9 +291,7 @@ impl SessionState {
                 call_id,
                 output,
             } => {
-                if let Ok(Some(event)) = self.try_transition_with_event(SessionPhase::ToolResult) {
-                    events.push(event);
-                }
+                push_transition(self, SessionPhase::ToolResult, &mut events);
                 self.pending_parts.push(Part::ToolResult {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -306,9 +305,7 @@ impl SessionState {
                 call_id,
                 error,
             } => {
-                if let Ok(Some(event)) = self.try_transition_with_event(SessionPhase::ToolResult) {
-                    events.push(event);
-                }
+                push_transition(self, SessionPhase::ToolResult, &mut events);
                 self.pending_parts.push(Part::ToolError {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -318,11 +315,7 @@ impl SessionState {
                 (true, events)
             }
             Event::StepFinish { tokens, .. } => {
-                if let Ok(Some(event)) =
-                    self.try_transition_with_event(SessionPhase::AssistantFinalize)
-                {
-                    events.push(event);
-                }
+                push_transition(self, SessionPhase::AssistantFinalize, &mut events);
                 self.pending_parts.push(Part::TokenUsage {
                     usage: tokens.clone(),
                 });
@@ -691,7 +684,7 @@ mod tests {
     }
 
     #[test]
-    fn session_state_apply_event_with_events_skips_invalid_transition() {
+    fn session_state_apply_event_with_events_emits_invalid_transition() {
         let mut state = SessionState::new("s1", "m1");
         let event = Event::ToolStart {
             tool: "read".to_string(),
@@ -701,7 +694,17 @@ mod tests {
 
         let (handled, events) = state.apply_event_with_events(&event);
         assert!(handled);
-        assert!(events.is_empty());
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            Event::SessionPhaseTransitionRejected {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::UserInput,
+                to: SessionPhase::ToolRunning,
+                reason: "invalid transition UserInput -> ToolRunning".to_string(),
+            }
+        );
         assert_eq!(state.phase, SessionPhase::UserInput);
     }
 

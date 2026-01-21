@@ -1288,3 +1288,25 @@ un and into_node methods.
 - Next steps:
   - Emit explicit errors on invalid transitions.
   - Use phase transition events in audit/replay pipeline.
+
+## 2026-01-21 18:09:45 Invalid Phase Transition Events (Phase 5)
+
+- Date: 2026-01-21 18:09:45
+- Scope: Phase 5 transition error signaling
+- Summary: apply_event_with_events now emits explicit rejection events for invalid phase transitions.
+- Changes:
+  - Added `Event::SessionPhaseTransitionRejected` and emit it on invalid transitions.
+  - apply_event_with_events now returns phase rejection events in addition to phase changes.
+  - Added TDD coverage for invalid transition rejection event output.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Rejection events are not yet surfaced by LoopNode sink.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\\cargo.exe test`
+- Next steps:
+  - Emit rejection events from SessionStateSink in loop flows.
+  - Decide whether invalid transitions should hard-fail execution.
