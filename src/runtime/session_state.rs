@@ -321,6 +321,14 @@ impl SessionState {
                 });
                 (true, events)
             }
+            Event::PermissionAsked { .. } => {
+                push_transition(self, SessionPhase::Interrupted, &mut events);
+                (true, events)
+            }
+            Event::PermissionReplied { .. } => {
+                push_transition(self, SessionPhase::Resumed, &mut events);
+                (true, events)
+            }
             Event::Attachment {
                 name,
                 mime_type,
@@ -629,6 +637,31 @@ mod tests {
     }
 
     #[test]
+    fn session_state_apply_event_advances_phase_for_permission_asked() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::PermissionAsked {
+            permission: "fs.read".to_string(),
+            patterns: vec!["*".to_string()],
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.phase, SessionPhase::Interrupted);
+    }
+
+    #[test]
+    fn session_state_apply_event_advances_phase_for_permission_replied() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_interrupted();
+        let event = Event::PermissionReplied {
+            permission: "fs.read".to_string(),
+            reply: crate::runtime::event::PermissionReply::Once,
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(state.phase, SessionPhase::Resumed);
+    }
+
+    #[test]
     fn session_state_apply_event_with_events_emits_phase_change() {
         let mut state = SessionState::new("s1", "m1");
         state.mark_model_thinking();
@@ -681,6 +714,53 @@ mod tests {
             to: SessionPhase::ToolRunning,
         });
         assert_eq!(state.phase, SessionPhase::ToolRunning);
+    }
+
+    #[test]
+    fn session_state_apply_event_with_events_emits_permission_interrupt() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::PermissionAsked {
+            permission: "fs.read".to_string(),
+            patterns: vec!["*".to_string()],
+        };
+
+        let (handled, events) = state.apply_event_with_events(&event);
+
+        assert!(handled);
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            Event::SessionPhaseChanged {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::UserInput,
+                to: SessionPhase::Interrupted,
+            }
+        );
+    }
+
+    #[test]
+    fn session_state_apply_event_with_events_emits_permission_resumed() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_interrupted();
+        let event = Event::PermissionReplied {
+            permission: "fs.read".to_string(),
+            reply: crate::runtime::event::PermissionReply::Once,
+        };
+
+        let (handled, events) = state.apply_event_with_events(&event);
+
+        assert!(handled);
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            Event::SessionPhaseChanged {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::Interrupted,
+                to: SessionPhase::Resumed,
+            }
+        );
     }
 
     #[test]

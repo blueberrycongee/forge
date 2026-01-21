@@ -1623,6 +1623,26 @@ un and into_node methods.
   - Decide whether to make sorting optional via API flag.
   - Integrate record log reading into platform adapters.
 
+## 2026-01-22 00:24:00 Permission Phase Transitions (Phase 5)
+
+- Date: 2026-01-22 00:24:00
+- Scope: Phase 5 session state transitions
+- Summary: Permission events now drive Interrupted/Resumed phase transitions.
+- Changes:
+  - `SessionState` handles `PermissionAsked` → Interrupted and `PermissionReplied` → Resumed.
+  - Added TDD coverage for phase transitions and emitted phase change events.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Routing still not updated on permission events (phase only).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide whether permission events should also set SessionRouting::Interrupt.
+  - Propagate permission phase events to adapters (CLI/SSE/IDE).
+
 ## 2026-01-22 00:10:23 Plan Update for Event Protocol (Phase 5)
 
 - Date: 2026-01-22 00:10:23
