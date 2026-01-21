@@ -1501,3 +1501,23 @@ un and into_node methods.
 - Next steps:
   - Use `max_record_seq` + `EventSequencer::with_start_seq` in replay flows.
   - Integrate helper into platform adapters for continuity.
+
+## 2026-01-21 22:42:39 Trace Replay Start Seq Offset (Phase 5)
+
+- Date: 2026-01-21 22:42:39
+- Scope: Phase 5 replay continuity
+- Summary: Added trace replay API that offsets record sequencing.
+- Changes:
+  - Added `TraceReplay::replay_to_record_sink_with_start_seq`.
+  - Added TDD coverage for start-seq offset behavior.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Offset is not auto-derived from persisted records.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Feed `max_record_seq` into replay offset automatically.
+  - Expose offset replay in platform adapters (CLI/SSE/IDE).

@@ -70,6 +70,19 @@ impl TraceReplay {
         }
     }
 
+    pub fn replay_to_record_sink_with_start_seq(
+        trace: &ExecutionTrace,
+        sink: &dyn crate::runtime::event::EventRecordSink,
+        start_seq: u64,
+    ) {
+        let sequencer = crate::runtime::event::EventSequencer::with_start_seq(start_seq);
+        for event in &trace.events {
+            let runtime_event = map_trace_event(event);
+            let record = sequencer.record(runtime_event);
+            sink.emit_record(record);
+        }
+    }
+
     pub fn replay_to_json(trace: &ExecutionTrace) -> serde_json::Value {
         let mut events = Vec::new();
         for event in &trace.events {
@@ -259,6 +272,25 @@ mod tests {
         assert!(captured[0].meta.seq < captured[1].meta.seq);
         assert!(matches!(captured[0].event, Event::StepStart { .. }));
         assert!(matches!(captured[1].event, Event::StepFinish { .. }));
+    }
+
+    #[test]
+    fn trace_replay_records_with_start_seq_offset() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let sink = CaptureRecordSink {
+            records: Arc::clone(&records),
+        };
+
+        TraceReplay::replay_to_record_sink_with_start_seq(&trace, &sink, 99);
+
+        let captured = records.lock().unwrap();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].meta.seq, 100);
     }
 
     #[test]
