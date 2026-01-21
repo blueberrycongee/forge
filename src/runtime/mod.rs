@@ -82,6 +82,7 @@ pub mod prune;
 pub mod tool;
 pub mod trace;
 pub mod output;
+pub mod platform;
 pub mod session;
 pub mod session_state;
 pub mod r#loop;
@@ -122,6 +123,15 @@ pub use crate::runtime::event::{
         JsonLineEventSink,
         SseEventRecordSink,
         SseEventSink,
+    };
+    pub use crate::runtime::platform::{
+        PlatformOutputFormat,
+        PlatformStreamMode,
+        stream_to_writer,
+        stream_cli_jsonl_events,
+        stream_cli_jsonl_records,
+        stream_sse_events,
+        stream_sse_records,
     };
     pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
     pub use crate::runtime::session_state::{

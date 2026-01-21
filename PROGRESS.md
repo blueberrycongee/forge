@@ -1706,3 +1706,29 @@ un and into_node methods.
 - Next steps:
   - Decide how to attach metadata to SSE/CLI/IDE event streams.
   - Update plan once adapters are wired.
+
+## 2026-01-22 00:54:58 Platform Entry Output Wiring (Phase 5)
+
+- Date: 2026-01-22 00:54:58
+- Scope: Phase 5 platform entry wiring for event outputs
+- Summary: Added CLI/SSE entry helpers to wire output adapters into runtime streaming.
+- Changes:
+  - Added `runtime/platform.rs` with entry helpers for JSONL/SSE event and record streams.
+  - Wired helpers to JSONL/SSE sinks and record sinks via cloned execution config.
+  - Added TDD coverage for JSONL/SSE event and record entry outputs.
+  - Exported platform entry helpers via runtime prelude.
+  - Updated runtime plan status for platform adapter wiring.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\platform.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\opencode\forge\docs\OPENCODE_RUNTIME_PLAN.md`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Entry helpers are Rust-only; external CLI/SSE servers are not wired.
+  - Output sinks do not flush or propagate write errors.
+  - WSL distro not required per user request, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide error handling/flush strategy for output sinks.
+  - If needed, integrate forge entry helpers into higher-level CLI/SSE servers.
