@@ -1461,3 +1461,23 @@ un and into_node methods.
 - Next steps:
   - Decide where ordering should be enforced (event stream vs replay).
   - Integrate ordering helper into SSE/CLI/IDE record outputs.
+
+## 2026-01-21 22:39:52 Event Sequencer Start Offset (Phase 5)
+
+- Date: 2026-01-21 22:39:52
+- Scope: Phase 5 replay ordering continuity
+- Summary: Added EventSequencer start offset for continuity with persisted seq.
+- Changes:
+  - Added `EventSequencer::with_start_seq`.
+  - Added TDD coverage for sequence offsets.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Start offset not yet wired into replay or adapters.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Use start offset when replaying persisted EventRecords.
+  - Expose start offset in platform adapters if needed.

@@ -90,6 +90,12 @@ impl EventSequencer {
         Self::default()
     }
 
+    pub fn with_start_seq(start: u64) -> Self {
+        Self {
+            next_seq: AtomicU64::new(start),
+        }
+    }
+
     pub fn record(&self, event: Event) -> EventRecord {
         let seq = self.next_seq.fetch_add(1, AtomicOrdering::Relaxed) + 1;
         EventRecord::new(event, seq)
@@ -221,6 +227,21 @@ mod tests {
         assert_ne!(first.meta.event_id, second.meta.event_id);
         assert!(first.meta.seq < second.meta.seq);
         assert!(first.meta.timestamp_ms > 0);
+    }
+
+    #[test]
+    fn event_sequencer_starts_after_provided_base() {
+        let sequencer = EventSequencer::with_start_seq(41);
+
+        let first = sequencer.record(Event::StepStart {
+            session_id: "s1".to_string(),
+        });
+        let second = sequencer.record(Event::StepStart {
+            session_id: "s1".to_string(),
+        });
+
+        assert_eq!(first.meta.seq, 42);
+        assert_eq!(second.meta.seq, 43);
     }
 
     #[test]
