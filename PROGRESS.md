@@ -1421,3 +1421,23 @@ un and into_node methods.
 - Next steps:
   - Decide whether JSON output should include original seq/timestamps.
   - Expose record JSON output to platform adapters (CLI/SSE/IDE).
+
+## 2026-01-21 22:35:58 Trace Replay Record Audit Log (Phase 5)
+
+- Date: 2026-01-21 22:35:58
+- Scope: Phase 5 audit log output for record metadata
+- Summary: Added audit log writer for record JSON output with metadata.
+- Changes:
+  - Added `TraceReplay::write_audit_log_records` to persist record JSON.
+  - Added TDD coverage to assert meta fields exist in written log.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Record log uses fresh sequencing (not persisted).
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Decide whether audit log should preserve original seq/timestamps.
+  - Expose record audit log to platform adapters (CLI/SSE/IDE).
