@@ -223,21 +223,38 @@ impl SessionState {
     }
 
     pub fn apply_event(&mut self, event: &crate::runtime::event::Event) -> bool {
+        let (handled, _events) = self.apply_event_with_events(event);
+        handled
+    }
+
+    pub fn apply_event_with_events(
+        &mut self,
+        event: &crate::runtime::event::Event,
+    ) -> (bool, Vec<crate::runtime::event::Event>) {
         use crate::runtime::event::Event;
+        let mut events = Vec::new();
         match event {
             Event::TextDelta { delta, .. } => {
-                let _ = self.try_transition(SessionPhase::AssistantStreaming);
+                if let Ok(Some(event)) =
+                    self.try_transition_with_event(SessionPhase::AssistantStreaming)
+                {
+                    events.push(event);
+                }
                 self.pending_parts.push(Part::TextDelta {
                     delta: delta.clone(),
                 });
-                true
+                (true, events)
             }
             Event::TextFinal { text, .. } => {
-                let _ = self.try_transition(SessionPhase::AssistantStreaming);
+                if let Ok(Some(event)) =
+                    self.try_transition_with_event(SessionPhase::AssistantStreaming)
+                {
+                    events.push(event);
+                }
                 self.pending_parts.push(Part::TextFinal {
                     text: text.clone(),
                 });
-                true
+                (true, events)
             }
             Event::ToolStart {
                 tool,
@@ -245,9 +262,17 @@ impl SessionState {
                 input,
             } => {
                 if self.phase == SessionPhase::AssistantStreaming {
-                    let _ = self.try_transition(SessionPhase::ToolProposed);
+                    if let Ok(Some(event)) =
+                        self.try_transition_with_event(SessionPhase::ToolProposed)
+                    {
+                        events.push(event);
+                    }
                 }
-                let _ = self.try_transition(SessionPhase::ToolRunning);
+                if let Ok(Some(event)) =
+                    self.try_transition_with_event(SessionPhase::ToolRunning)
+                {
+                    events.push(event);
+                }
                 self.pending_parts.push(Part::ToolCall {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
@@ -258,42 +283,50 @@ impl SessionState {
                     record.status = ToolCallStatus::Running;
                     self.tool_calls.push(record);
                 }
-                true
+                (true, events)
             }
             Event::ToolResult {
                 tool,
                 call_id,
                 output,
             } => {
-                let _ = self.try_transition(SessionPhase::ToolResult);
+                if let Ok(Some(event)) = self.try_transition_with_event(SessionPhase::ToolResult) {
+                    events.push(event);
+                }
                 self.pending_parts.push(Part::ToolResult {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
                     output: output.clone(),
                 });
                 self.update_tool_call(call_id, ToolCallStatus::Completed);
-                true
+                (true, events)
             }
             Event::ToolError {
                 tool,
                 call_id,
                 error,
             } => {
-                let _ = self.try_transition(SessionPhase::ToolResult);
+                if let Ok(Some(event)) = self.try_transition_with_event(SessionPhase::ToolResult) {
+                    events.push(event);
+                }
                 self.pending_parts.push(Part::ToolError {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
                     error: error.clone(),
                 });
                 self.update_tool_call(call_id, ToolCallStatus::Error);
-                true
+                (true, events)
             }
             Event::StepFinish { tokens, .. } => {
-                let _ = self.try_transition(SessionPhase::AssistantFinalize);
+                if let Ok(Some(event)) =
+                    self.try_transition_with_event(SessionPhase::AssistantFinalize)
+                {
+                    events.push(event);
+                }
                 self.pending_parts.push(Part::TokenUsage {
                     usage: tokens.clone(),
                 });
-                true
+                (true, events)
             }
             Event::Attachment {
                 name,
@@ -306,15 +339,15 @@ impl SessionState {
                     mime_type: mime_type.clone(),
                     data: data.clone(),
                 });
-                true
+                (true, events)
             }
             Event::Error { message, .. } => {
                 self.pending_parts.push(Part::Error {
                     message: message.clone(),
                 });
-                true
+                (true, events)
             }
-            _ => false,
+            _ => (false, events),
         }
     }
 }
@@ -600,6 +633,76 @@ mod tests {
 
         assert!(state.apply_event(&event));
         assert_eq!(state.phase, SessionPhase::AssistantFinalize);
+    }
+
+    #[test]
+    fn session_state_apply_event_with_events_emits_phase_change() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_model_thinking();
+
+        let event = Event::TextDelta {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            delta: "hi".to_string(),
+        };
+
+        let (handled, events) = state.apply_event_with_events(&event);
+        assert!(handled);
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            Event::SessionPhaseChanged {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::ModelThinking,
+                to: SessionPhase::AssistantStreaming,
+            }
+        );
+        assert_eq!(state.phase, SessionPhase::AssistantStreaming);
+    }
+
+    #[test]
+    fn session_state_apply_event_with_events_emits_tool_phase_steps() {
+        let mut state = SessionState::new("s1", "m1");
+        state.mark_assistant_streaming();
+
+        let event = Event::ToolStart {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            input: serde_json::json!({"path": "file.txt"}),
+        };
+
+        let (handled, events) = state.apply_event_with_events(&event);
+        assert!(handled);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], Event::SessionPhaseChanged {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            from: SessionPhase::AssistantStreaming,
+            to: SessionPhase::ToolProposed,
+        });
+        assert_eq!(events[1], Event::SessionPhaseChanged {
+            session_id: "s1".to_string(),
+            message_id: "m1".to_string(),
+            from: SessionPhase::ToolProposed,
+            to: SessionPhase::ToolRunning,
+        });
+        assert_eq!(state.phase, SessionPhase::ToolRunning);
+    }
+
+    #[test]
+    fn session_state_apply_event_with_events_skips_invalid_transition() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = Event::ToolStart {
+            tool: "read".to_string(),
+            call_id: "c1".to_string(),
+            input: serde_json::json!({"path": "file.txt"}),
+        };
+
+        let (handled, events) = state.apply_event_with_events(&event);
+        assert!(handled);
+        assert!(events.is_empty());
+        assert_eq!(state.phase, SessionPhase::UserInput);
     }
 
     #[test]
