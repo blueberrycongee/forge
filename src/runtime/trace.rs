@@ -144,6 +144,16 @@ impl TraceReplay {
         std::fs::write(path, data)?;
         Ok(())
     }
+
+    pub fn read_audit_log_records(
+        path: impl AsRef<std::path::Path>,
+    ) -> std::io::Result<Vec<crate::runtime::event::EventRecord>> {
+        let contents = std::fs::read_to_string(path)?;
+        let records: Vec<crate::runtime::event::EventRecord> =
+            serde_json::from_str(&contents)
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        Ok(records)
+    }
 }
 
 fn map_trace_event(event: &TraceEvent) -> crate::runtime::event::Event {
@@ -409,5 +419,24 @@ mod tests {
         let contents = std::fs::read_to_string(path).expect("read");
         assert!(contents.contains("\"meta\""));
         assert!(contents.contains("\"event_id\""));
+    }
+
+    #[test]
+    fn trace_replay_read_audit_log_records_round_trip() {
+        let mut trace = ExecutionTrace::new();
+        trace.record_event(TraceEvent::NodeStart {
+            node: "a".to_string(),
+        });
+        let path = std::env::temp_dir().join(format!(
+            "forge-audit-records-read-{}.json",
+            uuid::Uuid::new_v4()
+        ));
+        TraceReplay::write_audit_log_records(&trace, &path).expect("write");
+
+        let records = TraceReplay::read_audit_log_records(&path).expect("read");
+
+        assert_eq!(records.len(), 1);
+        assert!(matches!(records[0].event, Event::StepStart { .. }));
+        assert!(!records[0].meta.event_id.is_empty());
     }
 }

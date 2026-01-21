@@ -1541,3 +1541,23 @@ un and into_node methods.
 - Next steps:
   - Integrate with platform adapters to auto-supply existing records.
   - Decide storage format for persisted EventRecords.
+
+## 2026-01-21 23:57:04 Trace Record Audit Log Reader (Phase 5)
+
+- Date: 2026-01-21 23:57:04
+- Scope: Phase 5 record persistence helpers
+- Summary: Added reader to load EventRecords from audit log JSON.
+- Changes:
+  - Added `TraceReplay::read_audit_log_records`.
+  - Added TDD coverage for round-trip write/read.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - No schema/version validation on loaded records.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Add schema/version checks for persisted record logs.
+  - Integrate record loading into platform adapters.
