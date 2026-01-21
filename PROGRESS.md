@@ -1225,3 +1225,25 @@ un and into_node methods.
 - Next steps:
   - Enforce phase transitions (surface errors) and emit state transition events.
   - Hook phase updates into LoopNode finalize flow (use try_transition).
+
+## 2026-01-21 17:23:24 SessionPhase Transition Events (Phase 5)
+
+- Date: 2026-01-21 17:23:24
+- Scope: Phase 5 state transition events
+- Summary: Added SessionPhase transition event emission helpers and Event PartialEq.
+- Changes:
+  - Added `Event::SessionPhaseChanged` and derived `PartialEq` for Event.
+  - Added `SessionState::try_transition_with_event` returning transition events.
+  - Added TDD coverage for transition events and no-op same-phase transitions.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Transition events are not yet emitted by LoopNode/SessionState flows.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\\cargo.exe test`
+- Next steps:
+  - Emit SessionPhaseChanged from loop/session flows when transitions occur.
+  - Convert apply_event phase updates to use try_transition_with_event and emit events.

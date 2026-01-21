@@ -5,6 +5,7 @@
 
 use std::fmt::Debug;
 
+use crate::runtime::session_state::SessionPhase;
 use crate::runtime::tool::{ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
@@ -26,7 +27,7 @@ pub enum PermissionReply {
 }
 
 /// Runtime events emitted during execution.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Event {
     TextDelta {
         session_id: String,
@@ -90,6 +91,12 @@ pub enum Event {
         session_id: String,
         summary: String,
         truncated_before: usize,
+    },
+    SessionPhaseChanged {
+        session_id: String,
+        message_id: String,
+        from: SessionPhase,
+        to: SessionPhase,
     },
 }
 

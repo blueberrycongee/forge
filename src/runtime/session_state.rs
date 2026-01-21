@@ -9,7 +9,7 @@ pub enum SessionRouting {
     Interrupt { reason: String },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum SessionPhase {
     UserInput,
     ModelThinking,
@@ -167,6 +167,30 @@ impl SessionState {
         if self.can_transition(&next) {
             self.phase = next;
             Ok(())
+        } else {
+            Err(format!(
+                "invalid transition {:?} -> {:?}",
+                self.phase, next
+            ))
+        }
+    }
+
+    pub fn try_transition_with_event(
+        &mut self,
+        next: SessionPhase,
+    ) -> Result<Option<crate::runtime::event::Event>, String> {
+        if self.phase == next {
+            return Ok(None);
+        }
+        if self.can_transition(&next) {
+            let from = self.phase.clone();
+            self.phase = next.clone();
+            Ok(Some(crate::runtime::event::Event::SessionPhaseChanged {
+                session_id: self.session_id.clone(),
+                message_id: self.message_id.clone(),
+                from,
+                to: next,
+            }))
         } else {
             Err(format!(
                 "invalid transition {:?} -> {:?}",
@@ -389,6 +413,36 @@ mod tests {
 
         assert!(state.try_transition(SessionPhase::ToolRunning).is_err());
         assert_eq!(state.phase, SessionPhase::UserInput);
+    }
+
+    #[test]
+    fn session_state_transition_emits_event() {
+        let mut state = SessionState::new("s1", "m1");
+
+        let event = state
+            .try_transition_with_event(SessionPhase::ModelThinking)
+            .expect("transition")
+            .expect("event");
+
+        assert_eq!(
+            event,
+            crate::runtime::event::Event::SessionPhaseChanged {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::UserInput,
+                to: SessionPhase::ModelThinking,
+            }
+        );
+    }
+
+    #[test]
+    fn session_state_transition_same_phase_emits_none() {
+        let mut state = SessionState::new("s1", "m1");
+        let event = state
+            .try_transition_with_event(SessionPhase::UserInput)
+            .expect("transition");
+
+        assert!(event.is_none());
     }
 
     #[test]
