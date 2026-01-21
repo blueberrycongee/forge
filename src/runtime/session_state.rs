@@ -10,6 +10,20 @@ pub enum SessionRouting {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum SessionPhase {
+    UserInput,
+    ModelThinking,
+    AssistantStreaming,
+    ToolProposed,
+    ToolRunning,
+    ToolResult,
+    AssistantFinalize,
+    Completed,
+    Interrupted,
+    Resumed,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum ToolCallStatus {
     Pending,
     Running,
@@ -44,6 +58,7 @@ pub struct SessionState {
     pub pending_parts: Vec<Part>,
     pub tool_calls: Vec<ToolCallRecord>,
     pub routing: SessionRouting,
+    pub phase: SessionPhase,
 }
 
 impl SessionState {
@@ -57,6 +72,7 @@ impl SessionState {
             pending_parts: Vec::new(),
             tool_calls: Vec::new(),
             routing: SessionRouting::Next,
+            phase: SessionPhase::UserInput,
         }
     }
 
@@ -81,6 +97,46 @@ impl SessionState {
         self.routing = SessionRouting::Interrupt {
             reason: reason.into(),
         };
+    }
+
+    pub fn mark_user_input(&mut self) {
+        self.phase = SessionPhase::UserInput;
+    }
+
+    pub fn mark_model_thinking(&mut self) {
+        self.phase = SessionPhase::ModelThinking;
+    }
+
+    pub fn mark_assistant_streaming(&mut self) {
+        self.phase = SessionPhase::AssistantStreaming;
+    }
+
+    pub fn mark_tool_proposed(&mut self) {
+        self.phase = SessionPhase::ToolProposed;
+    }
+
+    pub fn mark_tool_running(&mut self) {
+        self.phase = SessionPhase::ToolRunning;
+    }
+
+    pub fn mark_tool_result(&mut self) {
+        self.phase = SessionPhase::ToolResult;
+    }
+
+    pub fn mark_assistant_finalize(&mut self) {
+        self.phase = SessionPhase::AssistantFinalize;
+    }
+
+    pub fn mark_completed(&mut self) {
+        self.phase = SessionPhase::Completed;
+    }
+
+    pub fn mark_interrupted(&mut self) {
+        self.phase = SessionPhase::Interrupted;
+    }
+
+    pub fn mark_resumed(&mut self) {
+        self.phase = SessionPhase::Resumed;
     }
 
     pub fn push_tool_call(&mut self, tool: impl Into<String>, call_id: impl Into<String>) {
@@ -196,7 +252,7 @@ impl SessionState {
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionRouting, SessionState, ToolCallStatus};
+    use super::{SessionPhase, SessionRouting, SessionState, ToolCallStatus};
     use crate::runtime::event::{Event, TokenUsage};
     use crate::runtime::message::{MessageRole, Part};
     use crate::runtime::tool::ToolOutput;
@@ -213,6 +269,7 @@ mod tests {
         assert!(state.pending_parts.is_empty());
         assert!(state.tool_calls.is_empty());
         assert_eq!(state.routing, SessionRouting::Next);
+        assert_eq!(state.phase, SessionPhase::UserInput);
     }
 
     #[test]
@@ -232,6 +289,40 @@ mod tests {
 
         state.route_next();
         assert_eq!(state.routing, SessionRouting::Next);
+    }
+
+    #[test]
+    fn session_state_phase_transitions() {
+        let mut state = SessionState::new("s1", "m1");
+
+        state.mark_model_thinking();
+        assert_eq!(state.phase, SessionPhase::ModelThinking);
+
+        state.mark_assistant_streaming();
+        assert_eq!(state.phase, SessionPhase::AssistantStreaming);
+
+        state.mark_tool_running();
+        assert_eq!(state.phase, SessionPhase::ToolRunning);
+
+        state.mark_tool_result();
+        assert_eq!(state.phase, SessionPhase::ToolResult);
+
+        state.mark_assistant_finalize();
+        assert_eq!(state.phase, SessionPhase::AssistantFinalize);
+
+        state.mark_completed();
+        assert_eq!(state.phase, SessionPhase::Completed);
+    }
+
+    #[test]
+    fn session_state_phase_interrupt_and_resume() {
+        let mut state = SessionState::new("s1", "m1");
+
+        state.mark_interrupted();
+        assert_eq!(state.phase, SessionPhase::Interrupted);
+
+        state.mark_resumed();
+        assert_eq!(state.phase, SessionPhase::Resumed);
     }
 
     #[test]

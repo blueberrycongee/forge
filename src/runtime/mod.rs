@@ -107,6 +107,7 @@ pub mod prelude {
     pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
     pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
     pub use crate::runtime::session_state::{
+        SessionPhase,
         SessionRouting,
         SessionState,
         ToolCallRecord,

@@ -1162,3 +1162,26 @@ un and into_node methods.
 - Next steps:
   - Add session state restoration into loop/session manager flows.
   - Consider automatic role selection or per-event role tracking.
+
+## 2026-01-21 17:16:14 SessionPhase State Machine (Phase 5)
+
+- Date: 2026-01-21 17:16:14
+- Scope: Phase 5 session state machine scaffolding
+- Summary: Added SessionPhase enum and transition helpers on SessionState.
+- Changes:
+  - Added `SessionPhase` with core phases (UserInput/Thinking/Streaming/Tool/Finalize/Completed/Interrupted/Resumed).
+  - Added phase transition helpers on SessionState and defaulted new state to UserInput.
+  - Exported SessionPhase in runtime prelude.
+  - Added TDD coverage for phase initialization and transitions.
+- Files touched:
+  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\opencode\forge\PROGRESS.md`
+- Known gaps / simplifications:
+  - Phase transitions are not enforced/validated yet.
+  - WSL distro not available, so WSL lint/CI not run.
+- Validation:
+  - `C:\Users\10758\.cargo\bin\cargo.exe test`
+- Next steps:
+  - Validate phase transitions (guard illegal transitions) and emit state transition events.
+  - Integrate phase updates into LoopNode/loop execution flow.
