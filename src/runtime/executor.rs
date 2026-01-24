@@ -30,7 +30,14 @@ use crate::runtime::branch::BranchSpec;
 use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
 use crate::runtime::ablation::NodeOverride;
 use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
-use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
+use crate::runtime::tool::{
+    AttachmentPolicy,
+    AttachmentStore,
+    ToolCall,
+    ToolContext,
+    ToolOutput,
+    ToolRegistry,
+};
 
 /// Configuration for graph execution
 #[derive(Clone)]
@@ -63,6 +70,8 @@ pub struct ExecutionConfig {
     pub event_record_sink: Option<Arc<dyn EventRecordSink>>,
     /// Optional run lifecycle event sink
     pub run_event_sink: Option<Arc<dyn EventSink>>,
+    /// Attachment policy for tool outputs
+    pub attachment_policy: AttachmentPolicy,
     /// Optional trace collector
     pub trace: Option<Arc<std::sync::Mutex<ExecutionTrace>>>,
     /// Optional session snapshot collector
@@ -86,6 +95,7 @@ impl ExecutionConfig {
             event_history: None,
             event_record_sink: None,
             run_event_sink: None,
+            attachment_policy: AttachmentPolicy::default(),
             trace: None,
             session_snapshot: None,
         }
@@ -108,6 +118,7 @@ impl ExecutionConfig {
             event_history: None,
             event_record_sink: None,
             run_event_sink: None,
+            attachment_policy: AttachmentPolicy::default(),
             trace: None,
             session_snapshot: None,
         }
@@ -181,6 +192,12 @@ impl ExecutionConfig {
     /// Attach a run lifecycle event sink.
     pub fn with_run_event_sink(mut self, sink: Arc<dyn EventSink>) -> Self {
         self.run_event_sink = Some(sink);
+        self
+    }
+
+    /// Configure attachment policy for tool outputs.
+    pub fn with_attachment_policy(mut self, policy: AttachmentPolicy) -> Self {
+        self.attachment_policy = policy;
         self
     }
 
@@ -276,6 +293,8 @@ pub struct ToolExecutor {
     tools: Arc<ToolRegistry>,
     gate: Arc<dyn PermissionGate>,
     sink: Arc<dyn EventSink>,
+    attachment_policy: AttachmentPolicy,
+    attachment_store: Option<Arc<dyn AttachmentStore>>,
 }
 
 impl ToolExecutor {
@@ -283,17 +302,33 @@ impl ToolExecutor {
         tools: Arc<ToolRegistry>,
         gate: Arc<dyn PermissionGate>,
         sink: Arc<dyn EventSink>,
+        attachment_policy: AttachmentPolicy,
+        attachment_store: Option<Arc<dyn AttachmentStore>>,
     ) -> Self {
-        Self { tools, gate, sink }
+        Self {
+            tools,
+            gate,
+            sink,
+            attachment_policy,
+            attachment_store,
+        }
     }
 
     pub async fn run(&self, call: ToolCall) -> GraphResult<ToolOutput> {
         let permission = format!("tool:{}", call.tool);
         match self.gate.decide(&permission) {
             PermissionDecision::Allow => {
-                self.tools
-                    .run_with_events(call, Arc::clone(&self.sink))
-                    .await
+                let mut context = ToolContext::new(
+                    Arc::clone(&self.sink),
+                    Arc::clone(&self.gate),
+                    self.attachment_policy.clone(),
+                    call.tool.clone(),
+                    call.call_id.clone(),
+                );
+                if let Some(store) = &self.attachment_store {
+                    context = context.with_attachment_store(Arc::clone(store));
+                }
+                self.tools.run_with_events(call, context).await
             }
             PermissionDecision::Ask => {
                 let request = PermissionRequest::new(permission.clone(), vec![permission.clone()]);
@@ -669,6 +704,12 @@ impl<S: GraphState> CompiledGraph<S> {
                     checkpoint_id: checkpoint.checkpoint_id.clone(),
                 });
             }
+            Err(GraphError::Aborted { reason }) => {
+                self.emit_run_event(Event::RunAborted {
+                    run_id,
+                    reason: reason.clone(),
+                });
+            }
             Err(err) => {
                 self.emit_run_event(Event::RunFailed {
                     run_id,
@@ -718,6 +759,12 @@ impl<S: GraphState> CompiledGraph<S> {
                 self.emit_run_event(Event::RunPaused {
                     run_id,
                     checkpoint_id: checkpoint.checkpoint_id.clone(),
+                });
+            }
+            Err(GraphError::Aborted { reason }) => {
+                self.emit_run_event(Event::RunAborted {
+                    run_id,
+                    reason: reason.clone(),
                 });
             }
             Err(err) => {

@@ -11,7 +11,8 @@ use crate::runtime::permission::{
 use crate::runtime::node::NodeSpec;
 use crate::runtime::session_state::SessionState;
 use crate::runtime::state::GraphState;
-use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
+use crate::runtime::session::FileAttachmentStore;
+use crate::runtime::tool::{AttachmentPolicy, AttachmentStore, ToolCall, ToolOutput, ToolRegistry};
 
 /// LoopContext bundles tool registry + event sink for loop handlers.
 #[derive(Clone)]
@@ -19,14 +20,17 @@ pub struct LoopContext {
     sink: Arc<dyn EventSink>,
     tools: Arc<ToolRegistry>,
     gate: Arc<PermissionSession>,
+    attachment_policy: AttachmentPolicy,
+    attachment_store: Option<Arc<dyn AttachmentStore>>,
 }
 
 impl LoopContext {
     pub fn new(sink: Arc<dyn EventSink>, tools: Arc<ToolRegistry>) -> Self {
-        Self::new_with_gate(
+        Self::new_with_gate_and_policy(
             sink,
             tools,
             Arc::new(PermissionSession::new(PermissionPolicy::default())),
+            AttachmentPolicy::default(),
         )
     }
 
@@ -35,7 +39,22 @@ impl LoopContext {
         tools: Arc<ToolRegistry>,
         gate: Arc<PermissionSession>,
     ) -> Self {
-        Self { sink, tools, gate }
+        Self::new_with_gate_and_policy(sink, tools, gate, AttachmentPolicy::default())
+    }
+
+    pub fn new_with_gate_and_policy(
+        sink: Arc<dyn EventSink>,
+        tools: Arc<ToolRegistry>,
+        gate: Arc<PermissionSession>,
+        attachment_policy: AttachmentPolicy,
+    ) -> Self {
+        Self {
+            sink,
+            tools,
+            gate,
+            attachment_policy,
+            attachment_store: Some(default_attachment_store()),
+        }
     }
 
     pub fn emit(&self, event: Event) {
@@ -72,6 +91,8 @@ impl LoopContext {
             Arc::clone(&self.tools),
             gate,
             Arc::clone(&self.sink),
+            self.attachment_policy.clone(),
+            self.attachment_store.clone(),
         );
         executor.run(call).await
     }
@@ -85,6 +106,7 @@ pub struct LoopNode<S: GraphState> {
     name: String,
     tools: Arc<ToolRegistry>,
     gate: Arc<PermissionSession>,
+    attachment_policy: AttachmentPolicy,
     handler: Arc<
         dyn Fn(S, LoopContext) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>>
             + Send
@@ -100,7 +122,13 @@ impl<S: GraphState> LoopNode<S> {
     {
         let tools = Arc::new(ToolRegistry::new());
         let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
-        Self::with_tools_and_gate(name, tools, gate, handler)
+        Self::with_tools_and_gate_and_policy(
+            name,
+            tools,
+            gate,
+            AttachmentPolicy::default(),
+            handler,
+        )
     }
 
     pub fn with_tools<F, Fut>(
@@ -113,7 +141,13 @@ impl<S: GraphState> LoopNode<S> {
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
     {
         let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
-        Self::with_tools_and_gate(name, tools, gate, handler)
+        Self::with_tools_and_gate_and_policy(
+            name,
+            tools,
+            gate,
+            AttachmentPolicy::default(),
+            handler,
+        )
     }
 
     pub fn with_tools_and_gate<F, Fut>(
@@ -126,10 +160,31 @@ impl<S: GraphState> LoopNode<S> {
         F: Fn(S, LoopContext) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
     {
+        Self::with_tools_and_gate_and_policy(
+            name,
+            tools,
+            gate,
+            AttachmentPolicy::default(),
+            handler,
+        )
+    }
+
+    pub fn with_tools_and_gate_and_policy<F, Fut>(
+        name: impl Into<String>,
+        tools: Arc<ToolRegistry>,
+        gate: Arc<PermissionSession>,
+        attachment_policy: AttachmentPolicy,
+        handler: F,
+    ) -> Self
+    where
+        F: Fn(S, LoopContext) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
+    {
         Self {
             name: name.into(),
             tools,
             gate,
+            attachment_policy,
             handler: Arc::new(move |state, ctx| Box::pin(handler(state, ctx))),
         }
     }
@@ -139,10 +194,11 @@ impl<S: GraphState> LoopNode<S> {
     }
 
     pub fn run(&self, state: S, sink: Arc<dyn EventSink>) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
-        let ctx = LoopContext::new_with_gate(
+        let ctx = LoopContext::new_with_gate_and_policy(
             sink,
             Arc::clone(&self.tools),
             Arc::clone(&self.gate),
+            self.attachment_policy.clone(),
         );
         (self.handler)(state, ctx)
     }
@@ -180,15 +236,22 @@ impl<S: GraphState> LoopNode<S> {
         let handler = Arc::clone(&self.handler);
         let tools = Arc::clone(&self.tools);
         let gate = Arc::clone(&self.gate);
+        let attachment_policy = self.attachment_policy.clone();
         NodeSpec::new_stream(self.name, move |state, sink| {
-            let ctx = LoopContext::new_with_gate(
+            let ctx = LoopContext::new_with_gate_and_policy(
                 sink,
                 Arc::clone(&tools),
                 Arc::clone(&gate),
+                attachment_policy.clone(),
             );
             handler(state, ctx)
         })
     }
+}
+
+fn default_attachment_store() -> Arc<dyn AttachmentStore> {
+    let root = std::env::temp_dir().join("forge_attachments");
+    Arc::new(FileAttachmentStore::new(root))
 }
 
 struct SessionStateSink {
@@ -274,7 +337,7 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call| {
+        registry.register("echo", Arc::new(|call, _ctx| {
             Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);
@@ -302,7 +365,7 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call| {
+        registry.register("echo", Arc::new(|call, _ctx| {
             Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);
@@ -343,7 +406,7 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call| {
+        registry.register("echo", Arc::new(|call, _ctx| {
             Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);
@@ -380,7 +443,7 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call| {
+        registry.register("echo", Arc::new(|call, _ctx| {
             Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
         }));
         let registry = Arc::new(registry);

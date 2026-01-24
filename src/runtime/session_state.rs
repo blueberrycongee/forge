@@ -1,6 +1,7 @@
 ﻿//! Session state model for runtime loop processing.
 
 use crate::runtime::event::PermissionReply;
+use crate::runtime::tool::ToolAttachment;
 use crate::runtime::message::{Message, Part};
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -10,6 +11,7 @@ pub enum RunStatus {
     Paused,
     Completed,
     Failed,
+    Aborted,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -42,6 +44,12 @@ impl RunMetadata {
         self.status = RunStatus::Failed;
         self.updated_at = chrono::Utc::now().to_rfc3339();
         self.error = Some(message.into());
+    }
+
+    pub fn mark_aborted(&mut self, reason: impl Into<String>) {
+        self.status = RunStatus::Aborted;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+        self.error = Some(reason.into());
     }
 }
 
@@ -92,6 +100,23 @@ impl ToolCallRecord {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct ToolAttachmentRecord {
+    pub tool: String,
+    pub call_id: String,
+    pub attachment: ToolAttachment,
+}
+
+impl ToolAttachmentRecord {
+    pub fn new(tool: impl Into<String>, call_id: impl Into<String>, attachment: ToolAttachment) -> Self {
+        Self {
+            tool: tool.into(),
+            call_id: call_id.into(),
+            attachment,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct PermissionDecisionRecord {
     pub permission: String,
     pub reply: PermissionReply,
@@ -117,6 +142,7 @@ pub struct SessionState {
     pub messages: Vec<Message>,
     pub pending_parts: Vec<Part>,
     pub tool_calls: Vec<ToolCallRecord>,
+    pub tool_attachments: Vec<ToolAttachmentRecord>,
     pub permission_decisions: Vec<PermissionDecisionRecord>,
     pub routing: SessionRouting,
     pub phase: SessionPhase,
@@ -132,6 +158,7 @@ impl SessionState {
             messages: Vec::new(),
             pending_parts: Vec::new(),
             tool_calls: Vec::new(),
+            tool_attachments: Vec::new(),
             permission_decisions: Vec::new(),
             routing: SessionRouting::Next,
             phase: SessionPhase::UserInput,
@@ -371,6 +398,18 @@ impl SessionState {
                 self.update_tool_call(call_id, ToolCallStatus::Completed);
                 (true, events)
             }
+            Event::ToolAttachment {
+                tool,
+                call_id,
+                attachment,
+            } => {
+                self.tool_attachments.push(ToolAttachmentRecord::new(
+                    tool.clone(),
+                    call_id.clone(),
+                    attachment.clone(),
+                ));
+                (true, events)
+            }
             Event::ToolError {
                 tool,
                 call_id,
@@ -445,6 +484,7 @@ mod tests {
         assert!(state.messages.is_empty());
         assert!(state.pending_parts.is_empty());
         assert!(state.tool_calls.is_empty());
+        assert!(state.tool_attachments.is_empty());
         assert!(state.permission_decisions.is_empty());
         assert_eq!(state.routing, SessionRouting::Next);
         assert_eq!(state.phase, SessionPhase::UserInput);
@@ -995,5 +1035,9 @@ mod tests {
         meta.mark_failed("oops");
         assert_eq!(meta.status, super::RunStatus::Failed);
         assert_eq!(meta.error.as_deref(), Some("oops"));
+
+        meta.mark_aborted("user cancel");
+        assert_eq!(meta.status, super::RunStatus::Aborted);
+        assert_eq!(meta.error.as_deref(), Some("user cancel"));
     }
 }

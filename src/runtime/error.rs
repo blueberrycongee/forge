@@ -104,6 +104,8 @@ pub enum GraphError {
     CompilationError(String),
     /// Graph interrupted - waiting for human input
     Interrupted(Vec<Interrupt>),
+    /// Graph aborted (user-initiated cancellation)
+    Aborted { reason: String },
     /// Permission denied for an action
     PermissionDenied { permission: String, message: String },
     /// Checkpoint persistence error
@@ -135,6 +137,7 @@ impl fmt::Display for GraphError {
             Self::Interrupted(interrupts) => {
                 write!(f, "Graph interrupted with {} pending interrupt(s)", interrupts.len())
             }
+            Self::Aborted { reason } => write!(f, "Graph aborted: {}", reason),
             Self::PermissionDenied { permission, message } => {
                 write!(f, "Permission denied for '{}': {}", permission, message)
             }

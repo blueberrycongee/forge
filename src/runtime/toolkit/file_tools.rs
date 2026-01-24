@@ -37,7 +37,7 @@ fn register_file_tools_with_root(registry: &mut ToolRegistry, root: Arc<PathBuf>
         ToolDefinition::new("read", "Read file contents")
             .with_input_schema(schema_read())
             .with_output_schema(schema_read_output()),
-        Arc::new(move |call| {
+        Arc::new(move |call, _ctx| {
             let root = Arc::clone(&read_root);
             Box::pin(async move { handle_read(&root, call) })
         }),
@@ -49,7 +49,7 @@ fn register_file_tools_with_root(registry: &mut ToolRegistry, root: Arc<PathBuf>
             .with_input_schema(schema_write())
             .with_output_schema(schema_write_output())
             .mark_sensitive(),
-        Arc::new(move |call| {
+        Arc::new(move |call, _ctx| {
             let root = Arc::clone(&write_root);
             Box::pin(async move { handle_write(&root, call) })
         }),
@@ -61,7 +61,7 @@ fn register_file_tools_with_root(registry: &mut ToolRegistry, root: Arc<PathBuf>
             .with_input_schema(schema_edit())
             .with_output_schema(schema_edit_output())
             .mark_sensitive(),
-        Arc::new(move |call| {
+        Arc::new(move |call, _ctx| {
             let root = Arc::clone(&edit_root);
             Box::pin(async move { handle_edit(&root, call) })
         }),
@@ -72,7 +72,7 @@ fn register_file_tools_with_root(registry: &mut ToolRegistry, root: Arc<PathBuf>
         ToolDefinition::new("search", "Search text across files")
             .with_input_schema(schema_search())
             .with_output_schema(schema_search_output()),
-        Arc::new(move |call| {
+        Arc::new(move |call, _ctx| {
             let root = Arc::clone(&search_root);
             Box::pin(async move { handle_search(&root, call) })
         }),
@@ -83,7 +83,7 @@ fn register_file_tools_with_root(registry: &mut ToolRegistry, root: Arc<PathBuf>
         ToolDefinition::new("list", "List files and directories")
             .with_input_schema(schema_list())
             .with_output_schema(schema_list_output()),
-        Arc::new(move |call| {
+        Arc::new(move |call, _ctx| {
             let root = Arc::clone(&list_root);
             Box::pin(async move { handle_list(&root, call) })
         }),

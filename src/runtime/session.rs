@@ -2,13 +2,15 @@
 
 use std::collections::HashMap;
 use std::io::Write;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::compaction::CompactionResult;
-use crate::runtime::error::Interrupt;
+use crate::runtime::error::{GraphError, Interrupt};
 use crate::runtime::event::EventRecord;
 use crate::runtime::executor::Checkpoint;
+use crate::runtime::tool::{AttachmentStore, ToolAttachment};
 use crate::runtime::trace::ExecutionTrace;
 
 /// Minimal message payload for snapshots.
@@ -323,6 +325,71 @@ impl CheckpointStore {
         }
         entries.sort();
         Ok(entries)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AttachmentRecord {
+    pub attachment_id: String,
+    pub created_at: String,
+    pub attachment: ToolAttachment,
+}
+
+impl AttachmentRecord {
+    pub fn new(attachment_id: impl Into<String>, attachment: ToolAttachment) -> Self {
+        Self {
+            attachment_id: attachment_id.into(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            attachment,
+        }
+    }
+}
+
+/// File-backed attachment store for reference payloads.
+pub struct FileAttachmentStore {
+    root: PathBuf,
+}
+
+impl FileAttachmentStore {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    fn attachments_dir(&self) -> PathBuf {
+        self.root.join("attachments")
+    }
+
+    fn attachment_path(&self, attachment_id: &str) -> PathBuf {
+        self.attachments_dir().join(format!("{}.json", attachment_id))
+    }
+
+    pub fn save(&self, record: &AttachmentRecord) -> std::io::Result<()> {
+        let dir = self.attachments_dir();
+        std::fs::create_dir_all(&dir)?;
+        let path = self.attachment_path(&record.attachment_id);
+        let payload = serde_json::to_string_pretty(record)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        std::fs::write(path, payload)?;
+        Ok(())
+    }
+
+    pub fn load(&self, attachment_id: &str) -> std::io::Result<AttachmentRecord> {
+        let path = self.attachment_path(attachment_id);
+        let data = std::fs::read_to_string(path)?;
+        let record = serde_json::from_str(&data)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        Ok(record)
+    }
+}
+
+impl AttachmentStore for FileAttachmentStore {
+    fn store(&self, attachment: &ToolAttachment) -> Result<String, GraphError> {
+        let attachment_id = uuid::Uuid::new_v4().to_string();
+        let record = AttachmentRecord::new(attachment_id.clone(), attachment.clone());
+        self.save(&record).map_err(|err| {
+            GraphError::Other(format!("attachment store error: {}", err))
+        })?;
+        Ok(format!("attachment://{}", attachment_id))
     }
 }
 

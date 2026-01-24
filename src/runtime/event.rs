@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::runtime::session_state::{RunStatus, SessionPhase};
-use crate::runtime::tool::{ToolOutput, ToolState};
+use crate::runtime::tool::{ToolAttachment, ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -136,6 +136,10 @@ pub enum Event {
         run_id: String,
         error: String,
     },
+    RunAborted {
+        run_id: String,
+        reason: String,
+    },
     TextDelta {
         session_id: String,
         message_id: String,
@@ -167,6 +171,11 @@ pub enum Event {
         tool: String,
         call_id: String,
         output: ToolOutput,
+    },
+    ToolAttachment {
+        tool: String,
+        call_id: String,
+        attachment: ToolAttachment,
     },
     ToolError {
         tool: String,

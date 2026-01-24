@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::runtime::error::GraphResult;
+use crate::runtime::error::{GraphError, GraphResult, Interrupt};
 use crate::runtime::event::{Event, EventSink};
-use crate::runtime::error::GraphError;
+use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
 /// Tool lifecycle states for execution tracking.
@@ -32,6 +32,162 @@ impl ToolCall {
             call_id: call_id.into(),
             input,
         }
+    }
+}
+
+/// Attachment payload for tool outputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum AttachmentPayload {
+    Inline { data: serde_json::Value },
+    Reference { reference: String },
+}
+
+/// Tool attachment descriptor.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ToolAttachment {
+    pub name: String,
+    pub mime_type: String,
+    pub size: Option<u64>,
+    pub payload: AttachmentPayload,
+}
+
+impl ToolAttachment {
+    pub fn inline(
+        name: impl Into<String>,
+        mime_type: impl Into<String>,
+        data: serde_json::Value,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            mime_type: mime_type.into(),
+            size: None,
+            payload: AttachmentPayload::Inline { data },
+        }
+    }
+
+    pub fn reference(
+        name: impl Into<String>,
+        mime_type: impl Into<String>,
+        reference: impl Into<String>,
+        size: Option<u64>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            mime_type: mime_type.into(),
+            size,
+            payload: AttachmentPayload::Reference {
+                reference: reference.into(),
+            },
+        }
+    }
+}
+
+/// Policy for inline vs reference attachment handling.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AttachmentPolicy {
+    pub max_inline_bytes: usize,
+}
+
+impl AttachmentPolicy {
+    pub fn new(max_inline_bytes: usize) -> Self {
+        Self { max_inline_bytes }
+    }
+}
+
+impl Default for AttachmentPolicy {
+    fn default() -> Self {
+        Self {
+            max_inline_bytes: 64 * 1024,
+        }
+    }
+}
+
+/// Attachment persistence interface.
+pub trait AttachmentStore: Send + Sync {
+    fn store(&self, attachment: &ToolAttachment) -> GraphResult<String>;
+}
+
+/// Context passed to tools for emitting events and requesting permissions.
+#[derive(Clone)]
+pub struct ToolContext {
+    sink: Arc<dyn EventSink>,
+    gate: Arc<dyn PermissionGate>,
+    attachment_policy: AttachmentPolicy,
+    attachment_store: Option<Arc<dyn AttachmentStore>>,
+    tool: String,
+    call_id: String,
+}
+
+impl ToolContext {
+    pub fn new(
+        sink: Arc<dyn EventSink>,
+        gate: Arc<dyn PermissionGate>,
+        attachment_policy: AttachmentPolicy,
+        tool: impl Into<String>,
+        call_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            sink,
+            gate,
+            attachment_policy,
+            attachment_store: None,
+            tool: tool.into(),
+            call_id: call_id.into(),
+        }
+    }
+
+    pub fn tool(&self) -> &str {
+        &self.tool
+    }
+
+    pub fn call_id(&self) -> &str {
+        &self.call_id
+    }
+
+    pub fn attachment_policy(&self) -> &AttachmentPolicy {
+        &self.attachment_policy
+    }
+
+    pub fn with_attachment_store(mut self, store: Arc<dyn AttachmentStore>) -> Self {
+        self.attachment_store = Some(store);
+        self
+    }
+
+    pub fn attachment_store(&self) -> Option<Arc<dyn AttachmentStore>> {
+        self.attachment_store.clone()
+    }
+
+    pub fn emit(&self, event: Event) {
+        self.sink.emit(event);
+    }
+
+    pub fn sink(&self) -> Arc<dyn EventSink> {
+        Arc::clone(&self.sink)
+    }
+
+    pub fn ask_permission(&self, permission: impl Into<String>) -> GraphResult<()> {
+        let permission = permission.into();
+        match self.gate.decide(&permission) {
+            PermissionDecision::Allow => Ok(()),
+            PermissionDecision::Ask => {
+                let request = PermissionRequest::new(permission.clone(), vec![permission.clone()]);
+                self.emit(request.to_event());
+                Err(GraphError::Interrupted(vec![Interrupt::new(
+                    request,
+                    format!("permission:{}", permission),
+                )]))
+            }
+            PermissionDecision::Deny => Err(GraphError::PermissionDenied {
+                permission,
+                message: "permission denied".to_string(),
+            }),
+        }
+    }
+
+    pub fn abort<T>(&self, reason: impl Into<String>) -> GraphResult<T> {
+        Err(GraphError::Aborted {
+            reason: reason.into(),
+        })
     }
 }
 
@@ -123,6 +279,7 @@ impl Default for ToolMetadata {
 pub struct ToolOutput {
     pub content: serde_json::Value,
     pub metadata: Option<ToolMetadata>,
+    pub attachments: Vec<ToolAttachment>,
 }
 
 impl ToolOutput {
@@ -130,6 +287,7 @@ impl ToolOutput {
         Self {
             content,
             metadata: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -137,11 +295,22 @@ impl ToolOutput {
         Self {
             content,
             metadata: Some(metadata),
+            attachments: Vec::new(),
         }
     }
 
     pub fn text(text: impl Into<String>) -> Self {
         Self::new(serde_json::Value::String(text.into()))
+    }
+
+    pub fn with_attachment(mut self, attachment: ToolAttachment) -> Self {
+        self.attachments.push(attachment);
+        self
+    }
+
+    pub fn with_attachments(mut self, attachments: Vec<ToolAttachment>) -> Self {
+        self.attachments = attachments;
+        self
     }
 
     pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
@@ -175,16 +344,17 @@ pub struct ToolRunner;
 impl ToolRunner {
     pub async fn run_with_events<F, Fut>(
         call: ToolCall,
-        sink: Arc<dyn EventSink>,
+        context: ToolContext,
         run: F,
     ) -> GraphResult<ToolOutput>
     where
-        F: FnOnce(ToolCall) -> Fut + Send + 'static,
+        F: FnOnce(ToolCall, ToolContext) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = GraphResult<ToolOutput>> + Send + 'static,
     {
         let tool = call.tool.clone();
         let call_id = call.call_id.clone();
         let input = call.input.clone();
+        let sink = context.sink();
 
         sink.emit(Event::ToolStatus {
             tool: tool.clone(),
@@ -202,20 +372,47 @@ impl ToolRunner {
             state: ToolState::Running,
         });
 
-        let result = run(call).await;
+        let context_clone = context.clone();
+        let result = run(call, context).await;
 
-        match &result {
-            Ok(output) => {
-                sink.emit(Event::ToolStatus {
-                    tool: tool.clone(),
-                    call_id: call_id.clone(),
-                    state: ToolState::Completed,
-                });
-                sink.emit(Event::ToolResult {
-                    tool: tool.clone(),
-                    call_id: call_id.clone(),
-                    output: output.clone(),
-                });
+        match result {
+            Ok(mut output) => {
+                match process_attachments(&context_clone, &tool, output.attachments.clone()) {
+                    Ok(attachments) => {
+                        output.attachments = attachments.clone();
+                        sink.emit(Event::ToolStatus {
+                            tool: tool.clone(),
+                            call_id: call_id.clone(),
+                            state: ToolState::Completed,
+                        });
+                        for attachment in attachments {
+                            sink.emit(Event::ToolAttachment {
+                                tool: tool.clone(),
+                                call_id: call_id.clone(),
+                                attachment,
+                            });
+                        }
+                        sink.emit(Event::ToolResult {
+                            tool: tool.clone(),
+                            call_id: call_id.clone(),
+                            output: output.clone(),
+                        });
+                        Ok(output)
+                    }
+                    Err(err) => {
+                        sink.emit(Event::ToolStatus {
+                            tool: tool.clone(),
+                            call_id: call_id.clone(),
+                            state: ToolState::Error,
+                        });
+                        sink.emit(Event::ToolError {
+                            tool: tool.clone(),
+                            call_id: call_id.clone(),
+                            error: err.to_string(),
+                        });
+                        Err(err)
+                    }
+                }
             }
             Err(err) => {
                 sink.emit(Event::ToolStatus {
@@ -228,16 +425,70 @@ impl ToolRunner {
                     call_id: call_id.clone(),
                     error: err.to_string(),
                 });
+                Err(err)
             }
         }
+    }
+}
 
-        result
+fn process_attachments(
+    context: &ToolContext,
+    tool: &str,
+    attachments: Vec<ToolAttachment>,
+) -> GraphResult<Vec<ToolAttachment>> {
+    let mut processed = Vec::new();
+    for attachment in attachments {
+        processed.push(normalize_attachment(context, tool, attachment)?);
+    }
+    Ok(processed)
+}
+
+fn normalize_attachment(
+    context: &ToolContext,
+    tool: &str,
+    mut attachment: ToolAttachment,
+) -> GraphResult<ToolAttachment> {
+    if attachment.mime_type.trim().is_empty() {
+        return Err(GraphError::ExecutionError {
+            node: format!("tool:{}", tool),
+            message: "attachment mime_type missing".to_string(),
+        });
+    }
+
+    match &attachment.payload {
+        AttachmentPayload::Inline { data } => {
+            let bytes = serde_json::to_vec(data).map_err(|err| GraphError::ExecutionError {
+                node: format!("tool:{}", tool),
+                message: format!("attachment serialization failed: {}", err),
+            })?;
+            let size = bytes.len() as u64;
+            if size <= context.attachment_policy.max_inline_bytes as u64 {
+                attachment.size = Some(size);
+                return Ok(attachment);
+            }
+            let store = context.attachment_store().ok_or_else(|| GraphError::ExecutionError {
+                node: format!("tool:{}", tool),
+                message: "attachment store unavailable".to_string(),
+            })?;
+            let reference = store.store(&attachment)?;
+            Ok(ToolAttachment::reference(
+                attachment.name,
+                attachment.mime_type,
+                reference,
+                Some(size),
+            ))
+        }
+        AttachmentPayload::Reference { .. } => Ok(attachment),
     }
 }
 
 /// Tool handler signature for registry execution.
 pub type ToolHandler =
-    Arc<dyn Fn(ToolCall) -> crate::runtime::node::BoxFuture<'static, GraphResult<ToolOutput>> + Send + Sync>;
+    Arc<
+        dyn Fn(ToolCall, ToolContext) -> crate::runtime::node::BoxFuture<'static, GraphResult<ToolOutput>>
+            + Send
+            + Sync,
+    >;
 
 /// Minimal tool registry for dispatching by name.
 #[derive(Default)]
@@ -283,7 +534,7 @@ impl ToolRegistry {
     pub async fn run_with_events(
         &self,
         call: ToolCall,
-        sink: Arc<dyn EventSink>,
+        context: ToolContext,
     ) -> GraphResult<ToolOutput> {
         let handler = self.tools.get(&call.tool).cloned().ok_or_else(|| {
             GraphError::ExecutionError {
@@ -292,7 +543,7 @@ impl ToolRegistry {
             }
         })?;
 
-        ToolRunner::run_with_events(call, sink, move |call| handler(call)).await
+        ToolRunner::run_with_events(call, context, move |call, ctx| handler(call, ctx)).await
     }
 }
 
@@ -344,17 +595,20 @@ impl ToolSchemaRegistry {
         if output.metadata.is_some() {
             return output;
         }
-        match self.schemas.get(tool) {
-            Some(metadata) => ToolOutput::with_metadata(output.content, metadata.clone()),
-            None => output,
+        let mut output = output;
+        if let Some(metadata) = self.schemas.get(tool) {
+            output.metadata = Some(metadata.clone());
         }
+        output
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
+        AttachmentPolicy,
         ToolCall,
+        ToolContext,
         ToolMetadata,
         ToolOutput,
         ToolRegistry,
@@ -363,6 +617,7 @@ mod tests {
         ToolState,
     };
     use crate::runtime::event::{Event, EventSink};
+    use crate::runtime::permission::{PermissionPolicy, PermissionSession};
     use futures::executor::block_on;
     use std::sync::{Arc, Mutex};
 
@@ -388,7 +643,15 @@ mod tests {
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
 
         let call = ToolCall::new("grep", "call-1", serde_json::json!({"q": "hi"}));
-        let result = block_on(ToolRunner::run_with_events(call, sink, |call| async move {
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+        let context = ToolContext::new(
+            Arc::clone(&sink),
+            gate,
+            AttachmentPolicy::default(),
+            call.tool.clone(),
+            call.call_id.clone(),
+        );
+        let result = block_on(ToolRunner::run_with_events(call, context, |call, _ctx| async move {
             Ok(ToolOutput::text(format!("ok:{}", call.tool)))
         }))
         .expect("tool run");
@@ -424,12 +687,20 @@ mod tests {
         let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
         let mut registry = ToolRegistry::new();
 
-        registry.register("echo", Arc::new(|call| {
+        registry.register("echo", Arc::new(|call, _ctx| {
             Box::pin(async move { Ok(ToolOutput::text(format!("echo:{}", call.tool))) })
         }));
 
         let call = ToolCall::new("echo", "call-2", serde_json::json!({"msg": "hi"}));
-        let result = block_on(registry.run_with_events(call, sink)).expect("registry run");
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+        let context = ToolContext::new(
+            Arc::clone(&sink),
+            gate,
+            AttachmentPolicy::default(),
+            call.tool.clone(),
+            call.call_id.clone(),
+        );
+        let result = block_on(registry.run_with_events(call, context)).expect("registry run");
 
         assert_eq!(result.content, serde_json::Value::String("echo:echo".to_string()));
         assert!(events
@@ -446,8 +717,16 @@ mod tests {
             events: Arc::new(Mutex::new(Vec::new())),
         });
         let call = ToolCall::new("missing", "call-3", serde_json::json!({}));
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+        let context = ToolContext::new(
+            Arc::clone(&sink),
+            gate,
+            AttachmentPolicy::default(),
+            call.tool.clone(),
+            call.call_id.clone(),
+        );
 
-        let result = block_on(registry.run_with_events(call, sink));
+        let result = block_on(registry.run_with_events(call, context));
         assert!(result.is_err());
     }
 
