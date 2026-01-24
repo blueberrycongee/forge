@@ -167,6 +167,22 @@ pub struct PermissionRequest {
     pub patterns: Vec<String>,
 }
 
+impl PermissionRequest {
+    pub fn new(permission: impl Into<String>, patterns: Vec<String>) -> Self {
+        Self {
+            permission: permission.into(),
+            patterns,
+        }
+    }
+
+    pub fn to_event(&self) -> crate::runtime::event::Event {
+        crate::runtime::event::Event::PermissionAsked {
+            permission: self.permission.clone(),
+            patterns: self.patterns.clone(),
+        }
+    }
+}
+
 /// Serializable snapshot of runtime permission replies.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PermissionSnapshot {

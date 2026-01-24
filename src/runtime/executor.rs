@@ -12,7 +12,7 @@ use serde::{Serialize, Deserialize};
 use crate::runtime::constants::{START, END, MAX_ITERATIONS};
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
 use crate::runtime::state::GraphState;
-use crate::runtime::graph::{StateGraph, Edge};
+use crate::runtime::graph::{evaluate_branch, Edge, StateGraph};
 use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSequencer, EventSink};
 use crate::runtime::compaction::{
     CompactionContext,
@@ -26,12 +26,14 @@ use crate::runtime::trace::{ExecutionTrace, TraceEvent};
 use crate::runtime::message::{Message, MessageRole, Part};
 use crate::runtime::session::SessionSnapshot;
 use crate::runtime::node::{Node, NodeSpec};
-use crate::runtime::branch::{Branch, BranchSpec};
+use crate::runtime::branch::BranchSpec;
 use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
 use crate::runtime::ablation::NodeOverride;
+use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
+use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
 
 /// Configuration for graph execution
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ExecutionConfig {
     /// Maximum number of iterations
     pub max_iterations: usize,
@@ -59,6 +61,8 @@ pub struct ExecutionConfig {
     pub event_history: Option<Arc<std::sync::Mutex<Vec<EventRecord>>>>,
     /// Optional event record sink (for protocol metadata)
     pub event_record_sink: Option<Arc<dyn EventRecordSink>>,
+    /// Optional run lifecycle event sink
+    pub run_event_sink: Option<Arc<dyn EventSink>>,
     /// Optional trace collector
     pub trace: Option<Arc<std::sync::Mutex<ExecutionTrace>>>,
     /// Optional session snapshot collector
@@ -81,6 +85,7 @@ impl ExecutionConfig {
             prune_policy: PrunePolicy::default(),
             event_history: None,
             event_record_sink: None,
+            run_event_sink: None,
             trace: None,
             session_snapshot: None,
         }
@@ -102,6 +107,7 @@ impl ExecutionConfig {
             prune_policy: PrunePolicy::default(),
             event_history: None,
             event_record_sink: None,
+            run_event_sink: None,
             trace: None,
             session_snapshot: None,
         }
@@ -172,6 +178,12 @@ impl ExecutionConfig {
         self
     }
 
+    /// Attach a run lifecycle event sink.
+    pub fn with_run_event_sink(mut self, sink: Arc<dyn EventSink>) -> Self {
+        self.run_event_sink = Some(sink);
+        self
+    }
+
     /// Attach trace collector for node events
     pub fn with_trace(mut self, trace: Arc<std::sync::Mutex<ExecutionTrace>>) -> Self {
         self.trace = Some(trace);
@@ -219,6 +231,12 @@ impl Default for ExecutionConfig {
 /// Checkpoint - saves execution state at interrupt
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint<S> {
+    /// Run id
+    pub run_id: String,
+    /// Checkpoint id
+    pub checkpoint_id: String,
+    /// Created timestamp
+    pub created_at: String,
     /// Current state
     pub state: S,
     /// Next node to execute
@@ -251,6 +269,46 @@ pub struct ExecutionResultWithMetrics<S> {
     pub result: ExecutionResult<S>,
     /// Collected metrics (if enabled)
     pub metrics: Option<RunMetrics>,
+}
+
+/// Executes tool calls with permission gating.
+pub struct ToolExecutor {
+    tools: Arc<ToolRegistry>,
+    gate: Arc<dyn PermissionGate>,
+    sink: Arc<dyn EventSink>,
+}
+
+impl ToolExecutor {
+    pub fn new(
+        tools: Arc<ToolRegistry>,
+        gate: Arc<dyn PermissionGate>,
+        sink: Arc<dyn EventSink>,
+    ) -> Self {
+        Self { tools, gate, sink }
+    }
+
+    pub async fn run(&self, call: ToolCall) -> GraphResult<ToolOutput> {
+        let permission = format!("tool:{}", call.tool);
+        match self.gate.decide(&permission) {
+            PermissionDecision::Allow => {
+                self.tools
+                    .run_with_events(call, Arc::clone(&self.sink))
+                    .await
+            }
+            PermissionDecision::Ask => {
+                let request = PermissionRequest::new(permission.clone(), vec![permission.clone()]);
+                self.sink.emit(request.to_event());
+                Err(GraphError::Interrupted(vec![Interrupt::new(
+                    request,
+                    format!("permission:{}", permission),
+                )]))
+            }
+            PermissionDecision::Deny => Err(GraphError::PermissionDenied {
+                permission,
+                message: "permission denied".to_string(),
+            }),
+        }
+    }
 }
 
 /// A compiled graph ready for execution
@@ -332,13 +390,13 @@ impl<S: GraphState> CompiledGraph<S> {
             iterations += 1;
 
             if self.config.debug {
-                println!("[LangGraph] Executing node: {}", current_node);
+                println!("[Forge] Executing node: {}", current_node);
             }
 
             // Check if node is masked
             if self.config.is_masked(&current_node) {
                 if self.config.debug {
-                    println!("[LangGraph] Skipping masked node: {}", current_node);
+                    println!("[Forge] Skipping masked node: {}", current_node);
                 }
                 if let Some(ref mut mb) = metrics_builder {
                     mb.skip_node(&current_node);
@@ -560,19 +618,20 @@ impl<S: GraphState> CompiledGraph<S> {
             None => Ok(END.to_string()),
             Some(edges) if edges.is_empty() => Ok(END.to_string()),
             Some(edges) => {
-                match &edges[0] {
-                    Edge::Direct(to) => Ok(to.clone()),
-                    Edge::Conditional(branch_name) => {
-                        let branch = self.branches.get(branch_name)
-                            .ok_or_else(|| GraphError::BranchError {
-                                node: current.to_string(),
-                                message: format!("Branch '{}' not found", branch_name),
-                            })?;
-
-                        let result = branch.evaluate(state)?;
-                        branch.resolve(&result)
+                let mut direct: Option<String> = None;
+                for edge in edges {
+                    match edge {
+                        Edge::Conditional(branch_name) => {
+                            return evaluate_branch(&self.branches, branch_name, state);
+                        }
+                        Edge::Direct(to) => {
+                            if direct.is_none() {
+                                direct = Some(to.clone());
+                            }
+                        }
                     }
                 }
+                Ok(direct.unwrap_or_else(|| END.to_string()))
             }
         }
     }
@@ -589,31 +648,92 @@ impl<S: GraphState> CompiledGraph<S> {
 
     /// Execute graph with interrupt/resume support
     pub async fn invoke_resumable(&self, initial_state: S) -> GraphResult<ExecutionResult<S>> {
-        self.run_with_checkpoint(initial_state, START.to_string(), 0, HashMap::new()).await
+        let run_id = uuid::Uuid::new_v4().to_string();
+        self.emit_run_event(Event::RunStarted {
+            run_id: run_id.clone(),
+            status: crate::runtime::session_state::RunStatus::Running,
+        });
+        let result = self
+            .run_with_checkpoint(run_id.clone(), initial_state, START.to_string(), 0, HashMap::new())
+            .await;
+        match &result {
+            Ok(ExecutionResult::Complete(_)) => {
+                self.emit_run_event(Event::RunCompleted {
+                    run_id,
+                    status: crate::runtime::session_state::RunStatus::Completed,
+                });
+            }
+            Ok(ExecutionResult::Interrupted { checkpoint, .. }) => {
+                self.emit_run_event(Event::RunPaused {
+                    run_id,
+                    checkpoint_id: checkpoint.checkpoint_id.clone(),
+                });
+            }
+            Err(err) => {
+                self.emit_run_event(Event::RunFailed {
+                    run_id,
+                    error: err.to_string(),
+                });
+            }
+        }
+        result
     }
 
     /// Resume from checkpoint
     pub async fn resume(&self, checkpoint: Checkpoint<S>, command: ResumeCommand) -> GraphResult<ExecutionResult<S>> {
         let mut resume_values = checkpoint.resume_values;
+        let resume_value = command.value.clone();
 
         // Add new resume value
         if let Some(interrupt_id) = command.interrupt_id {
-            resume_values.insert(interrupt_id, command.value);
-        } else if let Some(interrupt) = checkpoint.pending_interrupts.first() {
-            resume_values.insert(interrupt.id.clone(), command.value);
+            resume_values.insert(interrupt_id, resume_value.clone());
+        }
+        if let Some(interrupt) = checkpoint.pending_interrupts.first() {
+            resume_values.insert(interrupt.id.clone(), resume_value.clone());
+            resume_values.insert(interrupt.node.clone(), resume_value);
         }
 
-        self.run_with_checkpoint(
-            checkpoint.state,
-            checkpoint.next_node,
-            checkpoint.iterations,
-            resume_values,
-        ).await
+        let run_id = checkpoint.run_id.clone();
+        self.emit_run_event(Event::RunResumed {
+            run_id: run_id.clone(),
+            checkpoint_id: checkpoint.checkpoint_id.clone(),
+        });
+        let result = self
+            .run_with_checkpoint(
+                run_id.clone(),
+                checkpoint.state,
+                checkpoint.next_node,
+                checkpoint.iterations,
+                resume_values,
+            )
+            .await;
+        match &result {
+            Ok(ExecutionResult::Complete(_)) => {
+                self.emit_run_event(Event::RunCompleted {
+                    run_id,
+                    status: crate::runtime::session_state::RunStatus::Completed,
+                });
+            }
+            Ok(ExecutionResult::Interrupted { checkpoint, .. }) => {
+                self.emit_run_event(Event::RunPaused {
+                    run_id,
+                    checkpoint_id: checkpoint.checkpoint_id.clone(),
+                });
+            }
+            Err(err) => {
+                self.emit_run_event(Event::RunFailed {
+                    run_id,
+                    error: err.to_string(),
+                });
+            }
+        }
+        result
     }
 
     /// Internal execution with checkpoint support
     async fn run_with_checkpoint(
         &self,
+        run_id: String,
         initial_state: S,
         start_node: String,
         start_iterations: usize,
@@ -631,13 +751,13 @@ impl<S: GraphState> CompiledGraph<S> {
             iterations += 1;
 
             if self.config.debug {
-                println!("[LangGraph] Executing node: {} (iteration {})", current_node, iterations);
+                println!("[Forge] Executing node: {} (iteration {})", current_node, iterations);
             }
 
             // Check if masked
             if self.config.is_masked(&current_node) {
                 if self.config.debug {
-                    println!("[LangGraph] Skipping masked node: {}", current_node);
+                    println!("[Forge] Skipping masked node: {}", current_node);
                 }
                 current_node = self.get_next_node(&current_node, &state)?;
                 continue;
@@ -645,6 +765,12 @@ impl<S: GraphState> CompiledGraph<S> {
 
             // Check if we have a resume value for this node
             let has_resume = resume_values.contains_key(&current_node);
+            if let Some(value) = resume_values.get(&current_node) {
+                state.set(
+                    &format!("resume:{}", current_node),
+                    Box::new(value.clone()),
+                );
+            }
 
             // Execute the node
             let node = self.nodes.get(&current_node)
@@ -657,12 +783,15 @@ impl<S: GraphState> CompiledGraph<S> {
                 Err(GraphError::Interrupted(interrupts)) => {
                     if has_resume {
                         if self.config.debug {
-                            println!("[LangGraph] Resuming from interrupt at node: {}", current_node);
+                            println!("[Forge] Resuming from interrupt at node: {}", current_node);
                         }
                     } else {
                         // No resume value, return interrupted state
                         return Ok(ExecutionResult::Interrupted {
                             checkpoint: Checkpoint {
+                                run_id: run_id.clone(),
+                                checkpoint_id: uuid::Uuid::new_v4().to_string(),
+                                created_at: chrono::Utc::now().to_rfc3339(),
                                 state,
                                 next_node: current_node,
                                 pending_interrupts: interrupts.clone(),
@@ -766,6 +895,12 @@ impl<S: GraphState> CompiledGraph<S> {
             messages,
             trace,
             compactions,
+        }
+    }
+
+    fn emit_run_event(&self, event: Event) {
+        if let Some(sink) = &self.config.run_event_sink {
+            sink.emit(event);
         }
     }
 }

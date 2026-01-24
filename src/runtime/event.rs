@@ -1,6 +1,6 @@
 ﻿//! Event protocol for streaming execution.
 //!
-//! This is the foundation for OpenCode-style runtime events
+//! This is the foundation for tool-driven runtime events
 //! (text/tool/step/permission) so clients can consume a single stream.
 
 use std::cmp::Ordering;
@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::runtime::session_state::SessionPhase;
+use crate::runtime::session_state::{RunStatus, SessionPhase};
 use crate::runtime::tool::{ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
@@ -116,6 +116,26 @@ fn now_ms() -> u64 {
 /// Runtime events emitted during execution.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Event {
+    RunStarted {
+        run_id: String,
+        status: RunStatus,
+    },
+    RunPaused {
+        run_id: String,
+        checkpoint_id: String,
+    },
+    RunResumed {
+        run_id: String,
+        checkpoint_id: String,
+    },
+    RunCompleted {
+        run_id: String,
+        status: RunStatus,
+    },
+    RunFailed {
+        run_id: String,
+        error: String,
+    },
     TextDelta {
         session_id: String,
         message_id: String,

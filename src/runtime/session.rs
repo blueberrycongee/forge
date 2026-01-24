@@ -1,8 +1,14 @@
 ﻿//! Session snapshot structures for export/import.
 
+use std::collections::HashMap;
+use std::io::Write;
+
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::compaction::CompactionResult;
+use crate::runtime::error::Interrupt;
+use crate::runtime::event::EventRecord;
+use crate::runtime::executor::Checkpoint;
 use crate::runtime::trace::ExecutionTrace;
 
 /// Minimal message payload for snapshots.
@@ -77,6 +83,76 @@ impl SessionSnapshot {
     }
 }
 
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CheckpointRecord {
+    pub run_id: String,
+    pub checkpoint_id: String,
+    pub created_at: String,
+    pub state: serde_json::Value,
+    pub next_node: String,
+    pub iterations: usize,
+    pub pending_interrupts: Vec<Interrupt>,
+    pub resume_values: HashMap<String, serde_json::Value>,
+}
+
+impl CheckpointRecord {
+    pub fn new(
+        run_id: impl Into<String>,
+        checkpoint_id: impl Into<String>,
+        state: serde_json::Value,
+        next_node: impl Into<String>,
+        iterations: usize,
+        pending_interrupts: Vec<Interrupt>,
+        resume_values: HashMap<String, serde_json::Value>,
+    ) -> Self {
+        Self {
+            run_id: run_id.into(),
+            checkpoint_id: checkpoint_id.into(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            state,
+            next_node: next_node.into(),
+            iterations,
+            pending_interrupts,
+            resume_values,
+        }
+    }
+
+    pub fn from_checkpoint<S: Serialize>(
+        run_id: impl Into<String>,
+        checkpoint_id: impl Into<String>,
+        checkpoint: &Checkpoint<S>,
+    ) -> Result<Self, serde_json::Error> {
+        let state = serde_json::to_value(&checkpoint.state)?;
+        Ok(Self {
+            run_id: run_id.into(),
+            checkpoint_id: checkpoint_id.into(),
+            created_at: checkpoint.created_at.clone(),
+            state,
+            next_node: checkpoint.next_node.clone(),
+            iterations: checkpoint.iterations,
+            pending_interrupts: checkpoint.pending_interrupts.clone(),
+            resume_values: checkpoint.resume_values.clone(),
+        })
+    }
+
+    pub fn to_checkpoint<S: for<'de> Deserialize<'de>>(
+        &self,
+    ) -> Result<Checkpoint<S>, serde_json::Error> {
+        let state = serde_json::from_value(self.state.clone())?;
+        Ok(Checkpoint {
+            run_id: self.run_id.clone(),
+            checkpoint_id: self.checkpoint_id.clone(),
+            created_at: self.created_at.clone(),
+            state,
+            next_node: self.next_node.clone(),
+            pending_interrupts: self.pending_interrupts.clone(),
+            iterations: self.iterations,
+            resume_values: self.resume_values.clone(),
+        })
+    }
+}
+
 /// Session snapshot IO helpers.
 pub struct SessionSnapshotIo;
 
@@ -134,6 +210,119 @@ impl SessionStore {
     ) -> std::io::Result<Vec<crate::runtime::message::Message>> {
         let snapshot = self.load(session_id)?;
         Ok(snapshot.to_messages())
+    }
+}
+
+
+/// Append-only run log store (JSONL).
+pub struct RunLogStore {
+    root: std::path::PathBuf,
+}
+
+impl RunLogStore {
+    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    fn run_dir(&self, run_id: &str) -> std::path::PathBuf {
+        self.root.join(run_id)
+    }
+
+    fn log_path(&self, run_id: &str) -> std::path::PathBuf {
+        self.run_dir(run_id).join("events.jsonl")
+    }
+
+    pub fn append(&self, run_id: &str, record: &EventRecord) -> std::io::Result<()> {
+        let dir = self.run_dir(run_id);
+        std::fs::create_dir_all(&dir)?;
+        let path = self.log_path(run_id);
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+        let line = serde_json::to_string(record)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        writeln!(file, "{}", line)?;
+        Ok(())
+    }
+
+    pub fn load(&self, run_id: &str) -> std::io::Result<Vec<EventRecord>> {
+        let path = self.log_path(run_id);
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let contents = std::fs::read_to_string(path)?;
+        let mut records = Vec::new();
+        for line in contents.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let record: EventRecord = serde_json::from_str(line)
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+            records.push(record);
+        }
+        Ok(records)
+    }
+}
+
+/// File-backed checkpoint store for resumable runs.
+pub struct CheckpointStore {
+    root: std::path::PathBuf,
+}
+
+impl CheckpointStore {
+    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    fn run_dir(&self, run_id: &str) -> std::path::PathBuf {
+        self.root.join(run_id)
+    }
+
+    fn checkpoint_dir(&self, run_id: &str) -> std::path::PathBuf {
+        self.run_dir(run_id).join("checkpoints")
+    }
+
+    fn checkpoint_path(&self, run_id: &str, checkpoint_id: &str) -> std::path::PathBuf {
+        self.checkpoint_dir(run_id)
+            .join(format!("{}.json", checkpoint_id))
+    }
+
+    pub fn save(&self, record: &CheckpointRecord) -> std::io::Result<()> {
+        let dir = self.checkpoint_dir(&record.run_id);
+        std::fs::create_dir_all(&dir)?;
+        let path = self.checkpoint_path(&record.run_id, &record.checkpoint_id);
+        let payload = serde_json::to_string_pretty(record)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        std::fs::write(path, payload)?;
+        Ok(())
+    }
+
+    pub fn load(&self, run_id: &str, checkpoint_id: &str) -> std::io::Result<CheckpointRecord> {
+        let path = self.checkpoint_path(run_id, checkpoint_id);
+        let data = std::fs::read_to_string(path)?;
+        let record = serde_json::from_str(&data)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
+        Ok(record)
+    }
+
+    pub fn list(&self, run_id: &str) -> std::io::Result<Vec<String>> {
+        let dir = self.checkpoint_dir(run_id);
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut entries = Vec::new();
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                if let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) {
+                    entries.push(stem.to_string());
+                }
+            }
+        }
+        entries.sort();
+        Ok(entries)
     }
 }
 

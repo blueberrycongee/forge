@@ -1,6 +1,49 @@
 ﻿//! Session state model for runtime loop processing.
 
+use crate::runtime::event::PermissionReply;
 use crate::runtime::message::{Message, Part};
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum RunStatus {
+    Pending,
+    Running,
+    Paused,
+    Completed,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RunMetadata {
+    pub run_id: String,
+    pub status: RunStatus,
+    pub created_at: String,
+    pub updated_at: String,
+    pub error: Option<String>,
+}
+
+impl RunMetadata {
+    pub fn new(run_id: impl Into<String>) -> Self {
+        let now = chrono::Utc::now().to_rfc3339();
+        Self {
+            run_id: run_id.into(),
+            status: RunStatus::Pending,
+            created_at: now.clone(),
+            updated_at: now,
+            error: None,
+        }
+    }
+
+    pub fn mark_status(&mut self, status: RunStatus) {
+        self.status = status;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    pub fn mark_failed(&mut self, message: impl Into<String>) {
+        self.status = RunStatus::Failed;
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+        self.error = Some(message.into());
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SessionRouting {
@@ -49,6 +92,23 @@ impl ToolCallRecord {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct PermissionDecisionRecord {
+    pub permission: String,
+    pub reply: PermissionReply,
+    pub decided_at: String,
+}
+
+impl PermissionDecisionRecord {
+    pub fn new(permission: impl Into<String>, reply: PermissionReply) -> Self {
+        Self {
+            permission: permission.into(),
+            reply,
+            decided_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct SessionState {
     pub session_id: String,
     pub parent_id: Option<String>,
@@ -57,6 +117,7 @@ pub struct SessionState {
     pub messages: Vec<Message>,
     pub pending_parts: Vec<Part>,
     pub tool_calls: Vec<ToolCallRecord>,
+    pub permission_decisions: Vec<PermissionDecisionRecord>,
     pub routing: SessionRouting,
     pub phase: SessionPhase,
 }
@@ -71,6 +132,7 @@ impl SessionState {
             messages: Vec::new(),
             pending_parts: Vec::new(),
             tool_calls: Vec::new(),
+            permission_decisions: Vec::new(),
             routing: SessionRouting::Next,
             phase: SessionPhase::UserInput,
         }
@@ -212,6 +274,15 @@ impl SessionState {
         }
     }
 
+    pub fn record_permission_decision(
+        &mut self,
+        permission: impl Into<String>,
+        reply: PermissionReply,
+    ) {
+        self.permission_decisions
+            .push(PermissionDecisionRecord::new(permission, reply));
+    }
+
     pub fn finalize_message(&mut self, role: crate::runtime::message::MessageRole) -> Option<Message> {
         if self.pending_parts.is_empty() {
             return None;
@@ -326,7 +397,8 @@ impl SessionState {
                 push_transition(self, SessionPhase::Interrupted, &mut events);
                 (true, events)
             }
-            Event::PermissionReplied { .. } => {
+            Event::PermissionReplied { permission, reply } => {
+                self.record_permission_decision(permission.clone(), reply.clone());
                 self.route_next();
                 push_transition(self, SessionPhase::Resumed, &mut events);
                 (true, events)
@@ -373,6 +445,7 @@ mod tests {
         assert!(state.messages.is_empty());
         assert!(state.pending_parts.is_empty());
         assert!(state.tool_calls.is_empty());
+        assert!(state.permission_decisions.is_empty());
         assert_eq!(state.routing, SessionRouting::Next);
         assert_eq!(state.phase, SessionPhase::UserInput);
     }
@@ -661,6 +734,8 @@ mod tests {
 
         assert!(state.apply_event(&event));
         assert_eq!(state.phase, SessionPhase::Resumed);
+        assert_eq!(state.permission_decisions.len(), 1);
+        assert_eq!(state.permission_decisions[0].permission, "fs.read");
     }
 
     #[test]
@@ -906,5 +981,19 @@ mod tests {
                 message: "boom".to_string()
             }]
         );
+    }
+
+    #[test]
+    fn run_metadata_updates_status_and_error() {
+        let mut meta = super::RunMetadata::new("run-1");
+        assert_eq!(meta.status, super::RunStatus::Pending);
+
+        meta.mark_status(super::RunStatus::Running);
+        assert_eq!(meta.status, super::RunStatus::Running);
+        assert!(meta.error.is_none());
+
+        meta.mark_failed("oops");
+        assert_eq!(meta.status, super::RunStatus::Failed);
+        assert_eq!(meta.error.as_deref(), Some("oops"));
     }
 }

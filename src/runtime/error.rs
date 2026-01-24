@@ -1,4 +1,4 @@
-﻿//! Error types for LangGraph
+﻿//! Error types for Forge
 
 use std::fmt;
 use serde::{Serialize, Deserialize};
@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 // ============ Interrupt Types ============
 
 /// 中断信息，用于人机交互
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Interrupt {
     /// 要显示给用户的值（问题、选项等）
     pub value: serde_json::Value,
@@ -51,7 +51,7 @@ impl Interrupt {
 }
 
 /// 恢复命令，用于继续被中断的执行
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResumeCommand {
     /// 用户提供的恢复值
     pub value: serde_json::Value,
@@ -104,6 +104,10 @@ pub enum GraphError {
     CompilationError(String),
     /// Graph interrupted - waiting for human input
     Interrupted(Vec<Interrupt>),
+    /// Permission denied for an action
+    PermissionDenied { permission: String, message: String },
+    /// Checkpoint persistence error
+    CheckpointError { run_id: String, message: String },
     /// Generic error
     Other(String),
 }
@@ -130,6 +134,12 @@ impl fmt::Display for GraphError {
             Self::CompilationError(msg) => write!(f, "Compilation error: {}", msg),
             Self::Interrupted(interrupts) => {
                 write!(f, "Graph interrupted with {} pending interrupt(s)", interrupts.len())
+            }
+            Self::PermissionDenied { permission, message } => {
+                write!(f, "Permission denied for '{}': {}", permission, message)
+            }
+            Self::CheckpointError { run_id, message } => {
+                write!(f, "Checkpoint error for run '{}': {}", run_id, message)
             }
             Self::Other(msg) => write!(f, "{}", msg),
         }

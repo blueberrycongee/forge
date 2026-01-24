@@ -1,13 +1,11 @@
 ﻿use std::sync::{Arc, Mutex};
 
 use crate::runtime::event::{Event, EventSink};
-use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
+use crate::runtime::error::{GraphResult, ResumeCommand};
 use crate::runtime::message::MessageRole;
 use crate::runtime::permission::{
-    PermissionDecision,
     PermissionGate,
     PermissionPolicy,
-    PermissionRequest,
     PermissionSession,
 };
 use crate::runtime::node::NodeSpec;
@@ -69,35 +67,17 @@ impl LoopContext {
     }
 
     pub async fn run_tool(&self, call: ToolCall) -> GraphResult<ToolOutput> {
-        let permission = format!("tool:{}", call.tool);
-        match self.gate.decide(&permission) {
-            PermissionDecision::Allow => {
-                self.tools
-                    .run_with_events(call, Arc::clone(&self.sink))
-                    .await
-            }
-            PermissionDecision::Ask => {
-                self.emit(Event::PermissionAsked {
-                    permission: permission.clone(),
-                    patterns: vec![permission.clone()],
-                });
-                Err(GraphError::Interrupted(vec![Interrupt::new(
-                    PermissionRequest {
-                        permission: permission.clone(),
-                        patterns: vec![permission.clone()],
-                    },
-                    format!("permission:{}", permission),
-                )]))
-            }
-            PermissionDecision::Deny => Err(GraphError::ExecutionError {
-                node: format!("permission:{}", permission),
-                message: "permission denied".to_string(),
-            }),
-        }
+        let gate: Arc<dyn PermissionGate> = self.gate.clone();
+        let executor = crate::runtime::executor::ToolExecutor::new(
+            Arc::clone(&self.tools),
+            gate,
+            Arc::clone(&self.sink),
+        );
+        executor.run(call).await
     }
 }
 
-/// LoopNode is the OpenCode-style streaming loop abstraction.
+/// LoopNode is the tool-driven streaming loop abstraction.
 ///
 /// It is intentionally minimal in Phase 2: a callable unit that emits events
 /// and returns updated state, and can be converted into a stream-capable node.
@@ -242,6 +222,8 @@ impl EventSink for SessionStateSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::error::GraphError;
+    use crate::runtime::permission::PermissionRequest;
     use crate::runtime::event::{Event, EventSink};
     use crate::runtime::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
     use crate::runtime::session_state::{SessionState, ToolCallStatus};
