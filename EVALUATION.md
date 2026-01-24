@@ -1,4 +1,4 @@
-# LangGraph Rust - 评估与消融实验
+# Forge Rust - 评估与消融实验
 
 > 框架层提供的 Agent 评估和消融实验能力，用于分析节点贡献度和优化 Agent 性能。
 
@@ -9,7 +9,7 @@
 自动收集每次执行的详细指标：
 
 ```rust
-use langgraph::prelude::*;
+use forge::prelude::*;
 
 // 启用指标收集
 let config = ExecutionConfig::new()
@@ -56,7 +56,7 @@ let result = graph.invoke(state).await?;
 系统性分析每个节点的贡献度：
 
 ```rust
-use langgraph::prelude::*;
+use forge::prelude::*;
 
 // 1. 定义实验配置
 let (configs, test_cases) = AblationStudyBuilder::new()
@@ -93,7 +93,7 @@ println!("{}", report.to_markdown());
 内置多种评估器判断输出质量：
 
 ```rust
-use langgraph::prelude::*;
+use forge::prelude::*;
 
 // 组合评估器
 let evaluator = CompositeEvaluator::new()
@@ -167,7 +167,7 @@ println!("反馈: {}", eval_result.feedback);
 ## 文件结构
 
 ```
-src-tauri/src/langgraph/
+src-tauri/src/forge/
 ├── metrics.rs      # 指标收集（NodeMetrics, RunMetrics, MetricsCollector）
 ├── evaluator.rs    # 评估器（Evaluator trait, 内置评估器）
 ├── ablation.rs     # 消融实验（AblationConfig, AblationReport）
@@ -175,13 +175,13 @@ src-tauri/src/langgraph/
 └── mod.rs          # 模块导出
 ```
 
-## 与 Python LangGraph 对比
+## Python Reference Comparison
 
-| 功能 | Python LangGraph | langgraph-rust |
-|------|------------------|----------------|
-| 执行追踪 | ✅ LangSmith (SaaS) | ✅ 内置 |
-| 节点掩码 | ❌ | ✅ 框架原生 |
-| 消融实验 | ❌ | ✅ 一行代码 |
-| 节点贡献度分析 | ❌ | ✅ 自动计算 |
-| 离线分析 | ❌ | ✅ 本地 CLI |
-| 评估框架 | ⚠️ 需 LangSmith | ✅ 内置 |
+| Capability | Python Reference | Forge |
+|-----------|------------------|-------|
+| Execution tracing | hosted tracing (SaaS) | built-in |
+| Node masking | no | native |
+| Ablation study | no | one-line config |
+| Node contribution analysis | no | automatic |
+| Offline analysis | no | local CLI |
+| Evaluation framework | hosted tracing required | built-in |

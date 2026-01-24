@@ -1,4 +1,4 @@
-﻿//! Branch/conditional edge definitions for LangGraph
+﻿//! Branch/conditional edge definitions for Forge
 //! 
 //! Branches allow routing to different nodes based on state.
 

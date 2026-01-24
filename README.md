@@ -24,7 +24,7 @@ tracking, permission gating, and session observability.
 
 - State graph execution with async nodes
 - Streamed runtime events (text, tool, permissions, compaction)
-- LoopNode runtime for OpenCode-style agent loops
+- LoopNode runtime for tool-driven agent loops
 - Permission gating with allow/ask/deny and resume flow
 - Tool registry with lifecycle events and structured output
 - Compaction + prune policies with hooks

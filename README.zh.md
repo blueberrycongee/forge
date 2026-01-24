@@ -18,7 +18,7 @@ Forge 是一个 Rust 框架，用于构建有状态、事件驱动的 Agent 运�
 
 - 基于图的异步执行
 - 运行时事件流（文本、工具、权限、压缩）
-- OpenCode 风格的 LoopNode 运行时
+- Tool-driven LoopNode runtime
 - allow/ask/deny 权限门禁与恢复流
 - 工具注册表 + 生命周期事件 + 结构化输出
 - compaction + prune 策略与 hook

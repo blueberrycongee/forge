@@ -28,8 +28,8 @@ This log records atomic development progress for Forge. Each entry must be detai
   - Added `NoopEventSink` for silent execution/testing.
   - Exported new types via module prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - No executor integration yet (no `stream_events`).
   - No `StreamNode` trait yet; only base event types exist.
@@ -54,16 +54,16 @@ This log records atomic development progress for Forge. Each entry must be detai
   - Added unit test `stream_events_emits_from_stream_node` (TDD flow).
   - Replaced old `lumina_note_lib` doctest paths with `forge` for crate correctness.
 - Files touched:
-  - `D:\Desktop\opencode\forge\Cargo.toml`
-  - `D:\Desktop\opencode\forge\src\lib.rs`
-  - `D:\Desktop\opencode\forge\node.rs`
-  - `D:\Desktop\opencode\forge\graph.rs`
-  - `D:\Desktop\opencode\forge\executor.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\error.rs`
-  - `D:\Desktop\opencode\forge\state.rs`
-  - `D:\Desktop\opencode\forge\README.md`
+  - `D:\Desktop\project-note\forge\Cargo.toml`
+  - `D:\Desktop\project-note\forge\src\lib.rs`
+  - `D:\Desktop\project-note\forge\node.rs`
+  - `D:\Desktop\project-note\forge\graph.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\error.rs`
+  - `D:\Desktop\project-note\forge\state.rs`
+  - `D:\Desktop\project-note\forge\README.md`
 - Known gaps / simplifications:
   - Stream functions accept `Arc<dyn EventSink>` instead of `&dyn EventSink` (simpler lifetimes).
   - Non-stream execution of stream nodes uses `NoopEventSink`.
@@ -73,7 +73,7 @@ This log records atomic development progress for Forge. Each entry must be detai
   - `C:\Users\10758\.cargo\bin\cargo.exe test`
 - Next steps:
   - Define `Event` serialization format (serde + JSON schema).
-  - Add `LoopNode` skeleton for OpenCode-style streaming loop.
+  - Add `LoopNode` skeleton for tool-driven streaming loop.
   - Introduce PermissionGate + ToolLifecycle interfaces.
 
 ---
@@ -86,7 +86,7 @@ This log records atomic development progress for Forge. Each entry must be detai
 ## 2026-01-21 02:13:51 — LoopNode Skeleton (Phase 2)
 
 - Date: 2026-01-21 02:13:51
-- Scope: Phase 2 LoopNode skeleton (OpenCode-style loop abstraction)
+- Scope: Phase 2 LoopNode skeleton (tool-driven loop abstraction)
 - Summary: Added LoopNode with event-emitting handler and tests; integrated into module exports.
 - Changes:
   - Added LoopNode abstraction with 
@@ -95,8 +95,8 @@ un and into_node methods.
   - Exported LoopNode in module prelude (module name escaped as 
 #loop).
 - Files touched:
-  - D:\Desktop\opencode\forge\loop.rs
-  - D:\Desktop\opencode\forge\mod.rs
+  - D:\Desktop\project-note\forge\loop.rs
+  - D:\Desktop\project-note\forge\mod.rs
 - Known gaps / simplifications:
   - LoopNode is a thin wrapper around a stream-capable handler (no actual LLM/tool loop yet).
   - No structured loop state (session/message IDs, tool lifecycle) at this stage.
@@ -117,7 +117,7 @@ un and into_node methods.
   - Added `advance_step` helper for loop iteration tracking.
   - Added `loop_state_tracks_session_and_routing` test (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\state.rs`
+  - `D:\Desktop\project-note\forge\state.rs`
 - Known gaps / simplifications:
   - LoopState does not yet model messages, tool calls, or structured parts.
   - No persistence/serialization strategy for LoopState.
@@ -138,8 +138,8 @@ un and into_node methods.
   - Implemented minimal wildcard matching (`*` and prefix `prefix*`).
   - Added unit tests covering first-match order, wildcard prefix, and default allow (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\permission.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\permission.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Matching only supports exact or prefix wildcard; no full glob/regex.
   - Default decision is `Allow` when no rule matches (may be tightened later).
@@ -160,9 +160,9 @@ un and into_node methods.
   - Exported `ToolState` via module prelude.
   - Added unit tests for ToolState and ToolStatus event (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\tool.rs`
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - No structured tool call input/output model yet (only state).
   - ToolStatus does not carry timestamps or payloads.
@@ -183,8 +183,8 @@ un and into_node methods.
   - Exported `ToolCall`/`ToolRunner` via prelude.
   - Added unit test covering event order and output (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\tool.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Tool output is a `String`; no structured output type yet.
   - No timestamps or token usage tied to tool lifecycle.
@@ -205,8 +205,8 @@ un and into_node methods.
   - Added tests for registry dispatch and missing-tool error (TDD).
   - Exported `ToolRegistry` via prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\tool.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Registry uses `String` output (no structured ToolOutput yet).
   - No tool metadata/permissions integration yet.
@@ -229,8 +229,8 @@ un and into_node methods.
   - Added integration test `loop_node_runs_tools_via_registry` (TDD).
   - Exported LoopContext in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\loop.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\loop.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - LoopContext does not expose permission gating yet.
   - Tool outputs are still `String` (no structured ToolOutput).
@@ -252,7 +252,7 @@ un and into_node methods.
   - Emitted PermissionAsked event on Ask decisions.
   - Added unit test `loop_context_asks_permission_for_tool` (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\loop.rs`
+  - `D:\Desktop\project-note\forge\loop.rs`
 - Known gaps / simplifications:
   - Ask/deny currently return ExecutionError; no resume flow yet.
   - PermissionAsked event uses the requested permission as fallback patterns.
@@ -274,10 +274,10 @@ un and into_node methods.
   - Updated LoopContext tool integration tests to work with structured output (TDD).
   - Exported ToolOutput in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\tool.rs`
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\loop.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\loop.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - ToolOutput metadata is unstructured JSON (no schema yet).
   - ToolResult does not carry timestamps or token usage.
@@ -300,9 +300,9 @@ un and into_node methods.
   - Added tests for once/always/reject overrides and for reply-based tool execution (TDD).
   - Exported PermissionSession in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\permission.rs`
-  - `D:\Desktop\opencode\forge\loop.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\permission.rs`
+  - `D:\Desktop\project-note\forge\loop.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Ask/deny still return ExecutionError; no Interrupt resume command yet.
   - PermissionAsked includes only direct permission string as pattern.
@@ -325,10 +325,10 @@ un and into_node methods.
   - Added tests for resume parsing, interrupt payload, and resume-based tool execution (TDD).
   - Derived PartialEq for PermissionReply to simplify assertions.
 - Files touched:
-  - `D:\Desktop\opencode\forge\permission.rs`
-  - `D:\Desktop\opencode\forge\loop.rs`
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\permission.rs`
+  - `D:\Desktop\project-note\forge\loop.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Interrupt resume is local-only (no session persistence yet).
   - PermissionAsked patterns still mirror the requested permission string.
@@ -349,7 +349,7 @@ un and into_node methods.
   - Added helper methods to set mime_type/schema/source/custom attributes.
   - Added tests for metadata helpers and ToolOutput::with_metadata (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
 - Known gaps / simplifications:
   - No standardized schemas or enums for common tool outputs yet.
   - ToolResult does not carry timestamps or token usage.
@@ -369,7 +369,7 @@ un and into_node methods.
   - Added `PermissionSession::snapshot` and `PermissionSession::restore`.
   - Added tests for snapshot roundtrip and restore behavior (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\permission.rs`
+  - `D:\Desktop\project-note\forge\permission.rs`
 - Known gaps / simplifications:
   - Snapshot does not include base policy rules (only runtime overrides).
   - No IO/storage adapter yet; persistence integration is left to caller.
@@ -390,8 +390,8 @@ un and into_node methods.
   - Added tests for default entries and annotation behavior (TDD).
   - Exported ToolSchemaRegistry in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\tool.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Schemas are string identifiers only; no formal validation layer yet.
   - Common schemas are placeholders (read/grep/ls v1).
@@ -412,8 +412,8 @@ un and into_node methods.
   - Added tests for store roundtrip (TDD).
   - Exported PermissionStore/InMemoryPermissionStore in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\permission.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\permission.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - No filesystem or database adapter yet.
   - Store is not wired into LoopContext by default.
@@ -431,7 +431,7 @@ un and into_node methods.
 - Changes:
   - Marked Phase 2 as complete.
 - Files touched:
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Optional: tool-specific output structs (ReadOutput/GrepOutput/LsOutput).
   - Optional: wire PermissionStore into a higher-level session manager.
@@ -452,9 +452,9 @@ un and into_node methods.
   - Exported compaction types in prelude.
   - Added unit tests for policy threshold and result structure (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\compaction.rs`
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\compaction.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - No executor integration yet (compaction not triggered).
   - CompactionResult does not include summary prompt or token usage.
@@ -473,7 +473,7 @@ un and into_node methods.
   - Added `NoopCompactionHook` default implementation.
   - Added unit test for default hook behavior (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\compaction.rs`
+  - `D:\Desktop\project-note\forge\compaction.rs`
 - Known gaps / simplifications:
   - Hooks are not wired into executor/loop yet.
 - Validation:
@@ -492,7 +492,7 @@ un and into_node methods.
   - Added resolve_session_id helper (state.get("session_id") fallback).
   - Added test asserting compaction event emission (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - Hook uses empty message list (no message extraction yet).
   - Only stream_events path emits compaction events.
@@ -512,8 +512,8 @@ un and into_node methods.
   - Added unit tests for pruning behavior and disabled policy (TDD).
   - Exported prune types in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\prune.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\prune.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Pruning operates on event lists, not on message/part history yet.
   - No executor integration to apply pruning during runs.
@@ -533,7 +533,7 @@ un and into_node methods.
   - Applied prune_tool_events after each node when enabled.
   - Added test verifying old tool events are pruned (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - Pruning only applies to stream_events history; invoke/invoke_with_metrics unchanged.
   - History buffer is optional and not persisted by default.
@@ -552,8 +552,8 @@ un and into_node methods.
   - Added trace record helpers and roundtrip tests (TDD).
   - Exported trace types in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\trace.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\trace.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Trace is not yet wired into executor or replay engine.
 - Validation:
@@ -571,8 +571,8 @@ un and into_node methods.
   - Added unit test for replay order (TDD).
   - Exported TraceReplay in prelude.
 - Files touched:
-  - `D:\Desktop\opencode\forge\trace.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\trace.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - Replay only returns events; no reconstruction into state yet.
 - Validation:
@@ -591,9 +591,9 @@ un and into_node methods.
   - Exported session snapshot types in prelude.
   - Added serde derives to CompactionResult for snapshot support.
 - Files touched:
-  - `D:\Desktop\opencode\forge\session.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
-  - `D:\Desktop\opencode\forge\compaction.rs`
+  - `D:\Desktop\project-note\forge\session.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\compaction.rs`
 - Known gaps / simplifications:
   - Messages are minimal (role + content only).
   - Snapshot does not capture tool events or permissions yet.
@@ -614,7 +614,7 @@ un and into_node methods.
   - Added test verifying trace recording (TDD).
   - Removed legacy ExecutionTrace struct from executor to use shared trace module.
 - Files touched:
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - Snapshot builder does not include messages or compaction list yet.
   - Trace not connected to invoke/invoke_with_metrics paths.
@@ -634,7 +634,7 @@ un and into_node methods.
   - build_snapshot now returns collected messages + compactions + trace.
   - Added test validating snapshot updates (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - Messages are synthetic “node executed” entries, not real chat history.
   - Compactions only recorded when compaction hook triggers.
@@ -655,7 +655,7 @@ un and into_node methods.
   - Added helpers to resolve message count and collect messages.
   - Updated compaction event test to use policy (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - Message count is derived from snapshot messages or event history length.
   - Compaction still only fires in stream_events path.
@@ -675,8 +675,8 @@ un and into_node methods.
   - Updated executor compaction call site to pass context.
   - Added tests for context and updated hook test (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\compaction.rs`
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\compaction.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - prompt_hint is optional and not used by executor yet.
 - Validation:
@@ -694,7 +694,7 @@ un and into_node methods.
   - Applied pruning before or after compaction based on flag.
   - Added unit test to verify prune-before-compaction ordering (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
 - Known gaps / simplifications:
   - Ordering only applies to stream_events path.
   - Prune order does not yet affect compaction prompt content.
@@ -712,7 +712,7 @@ un and into_node methods.
   - Added `TraceReplay::replay_to_sink` mapping TraceEvent to runtime Event stream.
   - Added unit test for replay emission (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\trace.rs`
+  - `D:\Desktop\project-note\forge\trace.rs`
 - Known gaps / simplifications:
   - Replay uses synthetic session ids and default token usage.
   - Mapping is minimal (NodeStart/Finish/Compacted only).
@@ -732,9 +732,9 @@ un and into_node methods.
   - Updated build_snapshot to set version.
   - Added unit test for IO helper roundtrip (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\session.rs`
-  - `D:\Desktop\opencode\forge\executor.rs`
-  - `D:\Desktop\opencode\forge\mod.rs`
+  - `D:\Desktop\project-note\forge\session.rs`
+  - `D:\Desktop\project-note\forge\executor.rs`
+  - `D:\Desktop\project-note\forge\mod.rs`
 - Known gaps / simplifications:
   - No file system adapter yet (JSON value only).
   - No version migration strategy.
@@ -753,7 +753,7 @@ un and into_node methods.
   - Added SessionStore with save/load to snapshot.json under session directory.
   - Added unit test for store roundtrip (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\session.rs`
+  - `D:\Desktop\project-note\forge\session.rs`
 - Known gaps / simplifications:
   - No locking or concurrency strategy for store writes.
   - No version migration handling.
@@ -772,9 +772,9 @@ un and into_node methods.
   - Added serde derives for Event/TokenUsage/PermissionReply/ToolState.
   - Added unit test for replay JSON output (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\trace.rs`
-  - `D:\Desktop\opencode\forge\event.rs`
-  - `D:\Desktop\opencode\forge\tool.rs`
+  - `D:\Desktop\project-note\forge\trace.rs`
+  - `D:\Desktop\project-note\forge\event.rs`
+  - `D:\Desktop\project-note\forge\tool.rs`
 - Known gaps / simplifications:
   - Audit log uses minimal event mapping with synthetic session ids.
   - No file IO helper for audit log yet.
@@ -792,7 +792,7 @@ un and into_node methods.
   - Added `TraceReplay::write_audit_log` to write JSON audit logs to disk.
   - Added unit test for audit log write (TDD).
 - Files touched:
-  - `D:\Desktop\opencode\forge\trace.rs`
+  - `D:\Desktop\project-note\forge\trace.rs`
 - Known gaps / simplifications:
   - Audit log path handling is minimal (writes snapshot.json only).
 - Validation:
@@ -808,7 +808,7 @@ un and into_node methods.
 - Changes:
   - Marked Phase 4 as complete.
 - Files touched:
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / optional follow-ups:
   - Integrate audit log IO with higher-level session manager.
   - Add version migration for snapshots/audit logs.
@@ -828,10 +828,10 @@ un and into_node methods.
   - Archived previous README to `docs/README-legacy.md`.
   - Rewrote root `README.md` with concise project overview.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\lib.rs`
-  - `D:\Desktop\opencode\forge\src\\runtime\*.rs`
-  - `D:\Desktop\opencode\forge\docs\README-legacy.md`
-  - `D:\Desktop\opencode\forge\README.md`
+  - `D:\Desktop\project-note\forge\src\lib.rs`
+  - `D:\Desktop\project-note\forge\src\\runtime\*.rs`
+  - `D:\Desktop\project-note\forge\docs\README-legacy.md`
+  - `D:\Desktop\project-note\forge\README.md`
 - Known gaps / simplifications:
   - Older PROGRESS entries reference pre-move file paths.
 - Validation:
@@ -847,7 +847,7 @@ un and into_node methods.
 - Changes:
   - Marked Phase 3 as complete.
 - Files touched:
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / optional follow-ups:
   - Replace synthetic node messages with real conversation history.
   - Wire trace/compaction/snapshot to invoke/invoke_with_metrics paths.
@@ -857,20 +857,20 @@ un and into_node methods.
 - Next steps:
   - Begin Phase 4 or select optional follow-up items.
 
-## 2026-01-21 04:28:13 Runtime Module Rename (langgraph -> runtime)
+## 2026-01-21 04:28:13 Runtime Module Rename (forge -> runtime)
 
 - Date: 2026-01-21 04:28:13
 - Scope: Repository module rename to align with Forge runtime naming
-- Summary: Renamed internal module path from `langgraph` to `runtime` and updated references.
+- Summary: Renamed internal module path from `forge` to `runtime` and updated references.
 - Changes:
-  - Renamed `src/langgraph/` to `src/runtime/` and updated `src/lib.rs` exports.
-  - Replaced crate/module references to `langgraph` with `runtime` across code and docs.
+  - Renamed `src/forge/` to `src/runtime/` and updated `src/lib.rs` exports.
+  - Replaced crate/module references to `forge` with `runtime` across code and docs.
   - Updated README examples to use `forge::prelude::*` and `runtime` paths.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\lib.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\*.rs`
-  - `D:\Desktop\opencode\forge\README.md`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\lib.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\*.rs`
+  - `D:\Desktop\project-note\forge\README.md`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Archived docs may still reference legacy names (intentional).
 - Validation:
@@ -890,9 +890,9 @@ un and into_node methods.
   - Added tests covering mapping behavior and default message initialization (TDD).
   - Added `PartialEq` for `TokenUsage` to support comparisons.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\message.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
 - Known gaps / simplifications:
   - No integration with SessionSnapshot yet (still uses `SessionMessage`).
   - WSL distro not installed, so WSL lint/CI not run yet.
@@ -913,9 +913,9 @@ un and into_node methods.
   - Added `SessionSnapshot::push_message` to append converted messages.
   - Added TDD coverage for text-part ordering, non-text filtering, and snapshot append.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\message.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\session.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Non-text parts are ignored in snapshot conversion (tool outputs/attachments not serialized).
   - WSL distro not available, so WSL lint/CI not run.
@@ -935,9 +935,9 @@ un and into_node methods.
   - Added `SessionMessage::to_message` and `SessionSnapshot::to_messages` helpers.
   - Added TDD coverage for role parsing, empty content handling, and unknown role filtering.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\message.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\session.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Snapshot replay only restores text content (non-text parts remain unsupported).
   - WSL distro not available, so WSL lint/CI not run.
@@ -957,9 +957,9 @@ un and into_node methods.
   - `stream_events` builds a structured `Message` and uses snapshot conversion helpers.
   - Added TDD coverage for skipping empty snapshot messages.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\executor.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Snapshot still only stores flattened text; tool outputs/attachments are not preserved.
   - WSL distro not available, so WSL lint/CI not run.
@@ -978,8 +978,8 @@ un and into_node methods.
   - Added `SessionStore::load_messages` to load snapshots and convert to structured messages.
   - Added TDD coverage for restored messages and unknown role filtering.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Restored messages only contain text parts; tool outputs/attachments are still omitted.
   - WSL distro not available, so WSL lint/CI not run.
@@ -998,8 +998,8 @@ un and into_node methods.
   - Added `ExecutionConfig::with_snapshot_messages` for snapshot seeding.
   - Added TDD coverage for seeding behavior and empty-message filtering.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\executor.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Snapshot still only stores flattened text; tool outputs/attachments are not preserved.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1020,9 +1020,9 @@ un and into_node methods.
   - Exported session state types via runtime module prelude.
   - Added TDD coverage for initialization, routing transitions, and tool call tracking.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - SessionState is not wired into LoopNode or executor yet.
   - Tool call records do not track payloads or timestamps yet.
@@ -1042,8 +1042,8 @@ un and into_node methods.
   - Added `SessionState::finalize_message` to merge pending parts into a finalized Message.
   - Added tests covering merge order, pending_parts clearing, and empty pending handling.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - finalize_message does not handle message_id updates or tool-call correlation yet.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1062,8 +1062,8 @@ un and into_node methods.
   - Added `SessionState::apply_event` to capture TextDelta/ToolStart/ToolResult/ToolError.
   - Added TDD coverage for pending part updates and tool lifecycle tracking.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Event mapping ignores TextFinal/TokenUsage/Attachment for now.
   - Tool call tracking stores minimal status only (no timestamps).
@@ -1084,10 +1084,10 @@ un and into_node methods.
   - Extended `SessionState::apply_event` to handle TextFinal and StepFinish token usage.
   - Added TDD coverage for text final and token usage ingestion.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\message.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - apply_event still ignores attachments and errors beyond tool lifecycle.
   - Tool call tracking stores minimal status only (no timestamps).
@@ -1108,10 +1108,10 @@ un and into_node methods.
   - Extended `Part::from_event` and `SessionState::apply_event` to map attachments/errors.
   - Added TDD coverage for attachment/error mapping in message and session state tests.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\message.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\message.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Attachment payload is untyped JSON without schema enforcement.
   - Tool call tracking stores minimal status only (no timestamps).
@@ -1132,8 +1132,8 @@ un and into_node methods.
   - Added SessionState-aware sink to apply events before forwarding.
   - Added TDD coverage for LoopNode event ingestion updating SessionState.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\loop.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - SessionState finalize flow is not automatically triggered after runs.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1152,8 +1152,8 @@ un and into_node methods.
   - Added `LoopNode::run_with_session_state_and_finalize` to finalize pending parts into a Message.
   - Added SessionState finalize tests for message creation and no-op when empty.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\loop.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Finalization role is provided by caller; no automatic role inference yet.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1174,9 +1174,9 @@ un and into_node methods.
   - Exported SessionPhase in runtime prelude.
   - Added TDD coverage for phase initialization and transitions.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Phase transitions are not enforced/validated yet.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1195,8 +1195,8 @@ un and into_node methods.
   - Added `can_transition` and `try_transition` on SessionState with a minimal allowed path.
   - Added tests for happy-path transitions and invalid transition rejection.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Transition rules are minimal and not yet enforced by mark_* helpers.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1215,8 +1215,8 @@ un and into_node methods.
   - apply_event now advances phase for TextDelta/TextFinal/ToolStart/ToolResult/ToolError/StepFinish.
   - Added TDD coverage for phase changes on TextDelta, ToolStart, ToolResult, and StepFinish.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Phase updates are best-effort (try_transition failure is ignored).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1236,9 +1236,9 @@ un and into_node methods.
   - Added `SessionState::try_transition_with_event` returning transition events.
   - Added TDD coverage for transition events and no-op same-phase transitions.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Transition events are not yet emitted by LoopNode/SessionState flows.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1258,8 +1258,8 @@ un and into_node methods.
   - Updated `apply_event` to delegate to the new helper.
   - Added TDD coverage for phase change events and tool phase steps.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Transition events are not yet emitted by LoopNode/SessionState sinks.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1278,8 +1278,8 @@ un and into_node methods.
   - SessionStateSink emits `SessionPhaseChanged` events returned by `apply_event_with_events`.
   - Added TDD coverage to assert phase change events are emitted in LoopNode flows.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\loop.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Invalid transitions still ignored (no explicit error events).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1299,9 +1299,9 @@ un and into_node methods.
   - apply_event_with_events now returns phase rejection events in addition to phase changes.
   - Added TDD coverage for invalid transition rejection event output.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Rejection events are not yet surfaced by LoopNode sink.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1320,8 +1320,8 @@ un and into_node methods.
   - SessionStateSink forwards `SessionPhaseTransitionRejected` events.
   - Added TDD coverage for rejection event emission in LoopNode.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\loop.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\loop.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Invalid transitions still do not hard-fail; only emit rejection events.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1343,11 +1343,11 @@ un and into_node methods.
   - Added TDD coverage for sequencer metadata and record wrapper.
   - Updated executor/prune tests to use history records.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\prune.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\executor.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\prune.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Metadata is captured only in history buffers; emitted events still lack event_id/timestamp/seq.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1368,10 +1368,10 @@ un and into_node methods.
   - RecordingSink forwards `EventRecord` metadata to the sink while emitting events.
   - Added TDD coverage for record sink emission with metadata.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\executor.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\executor.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Record sink is optional; existing SSE/CLI/IDE adapters still need wiring.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1391,8 +1391,8 @@ un and into_node methods.
   - Reused trace→runtime Event mapping to avoid duplicate logic.
   - Added TDD coverage for record sink emission ordering and metadata.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Record replay uses fresh sequencing (not persisted).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1411,8 +1411,8 @@ un and into_node methods.
   - Added `TraceReplay::replay_to_record_json` for metadata-rich JSON output.
   - Added TDD coverage to assert metadata fields and seq ordering.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Record JSON uses fresh sequencing (not persisted).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1431,8 +1431,8 @@ un and into_node methods.
   - Added `TraceReplay::write_audit_log_records` to persist record JSON.
   - Added TDD coverage to assert meta fields exist in written log.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Record log uses fresh sequencing (not persisted).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1451,8 +1451,8 @@ un and into_node methods.
   - Added `EventRecord::cmp_meta` ordering and `sort_records_by_meta`.
   - Added TDD coverage for comparator and sorting behavior.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Ordering helper not yet applied in platform adapters.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1471,8 +1471,8 @@ un and into_node methods.
   - Added `EventSequencer::with_start_seq`.
   - Added TDD coverage for sequence offsets.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Start offset not yet wired into replay or adapters.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1491,8 +1491,8 @@ un and into_node methods.
   - Added `max_record_seq` utility.
   - Added TDD coverage for empty and non-empty inputs.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\event.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\event.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Helper not yet used to seed replay sequencing.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1511,8 +1511,8 @@ un and into_node methods.
   - Added `TraceReplay::replay_to_record_sink_with_start_seq`.
   - Added TDD coverage for start-seq offset behavior.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Offset is not auto-derived from persisted records.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1531,8 +1531,8 @@ un and into_node methods.
   - Added `TraceReplay::replay_to_record_sink_with_existing`.
   - Added TDD coverage for existing offset behavior (uses max seq).
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Existing records must be provided by caller; no auto fetch.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1551,8 +1551,8 @@ un and into_node methods.
   - Added `TraceReplay::read_audit_log_records`.
   - Added TDD coverage for round-trip write/read.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - No schema/version validation on loaded records.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1572,8 +1572,8 @@ un and into_node methods.
   - `read_audit_log_records` accepts legacy arrays and validates version.
   - Added TDD coverage for legacy support and invalid version rejection.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - No schema migration for future versions.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1592,8 +1592,8 @@ un and into_node methods.
   - Added `TraceReplay::replay_to_record_sink_with_record_log`.
   - Added TDD coverage to confirm seq offsets from record log file.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Record log path must be provided by caller.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1612,8 +1612,8 @@ un and into_node methods.
   - `read_audit_log_records` now sorts records by seq/timestamp/event_id.
   - Added TDD coverage for ordering on read.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\trace.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\trace.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Sorting is applied unconditionally; no option to preserve original order.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1632,8 +1632,8 @@ un and into_node methods.
   - `SessionState` handles `PermissionAsked` → Interrupted and `PermissionReplied` → Resumed.
   - Added TDD coverage for phase transitions and emitted phase change events.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Routing still not updated on permission events (phase only).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1653,8 +1653,8 @@ un and into_node methods.
   - `PermissionReplied` restores `SessionRouting::Next`.
   - Added TDD coverage for routing transitions.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\session_state.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\session_state.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Interrupt reason uses `permission:{name}` (pattern list not included).
   - WSL distro not available, so WSL lint/CI not run.
@@ -1675,9 +1675,9 @@ un and into_node methods.
   - Exported sinks via runtime prelude.
   - Added TDD coverage for JSONL and SSE output formatting.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\output.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\output.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Output sinks do not flush or handle write errors.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1696,8 +1696,8 @@ un and into_node methods.
   - Marked J1.3 event protocol items as partially complete based on record metadata work.
   - Noted record-level versioning, ordering, and replay coverage in plan.
 - Files touched:
-  - `D:\Desktop\opencode\forge\docs\OPENCODE_RUNTIME_PLAN.md`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\docs\OPENCODE_RUNTIME_PLAN.md`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Emitted event stream still lacks event_id/timestamp/seq fields.
   - WSL distro not available, so WSL lint/CI not run.
@@ -1719,10 +1719,10 @@ un and into_node methods.
   - Exported platform entry helpers via runtime prelude.
   - Updated runtime plan status for platform adapter wiring.
 - Files touched:
-  - `D:\Desktop\opencode\forge\src\runtime\platform.rs`
-  - `D:\Desktop\opencode\forge\src\runtime\mod.rs`
-  - `D:\Desktop\opencode\forge\docs\OPENCODE_RUNTIME_PLAN.md`
-  - `D:\Desktop\opencode\forge\PROGRESS.md`
+  - `D:\Desktop\project-note\forge\src\runtime\platform.rs`
+  - `D:\Desktop\project-note\forge\src\runtime\mod.rs`
+  - `D:\Desktop\project-note\forge\docs\OPENCODE_RUNTIME_PLAN.md`
+  - `D:\Desktop\project-note\forge\PROGRESS.md`
 - Known gaps / simplifications:
   - Entry helpers are Rust-only; external CLI/SSE servers are not wired.
   - Output sinks do not flush or propagate write errors.
