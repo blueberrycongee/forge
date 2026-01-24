@@ -2,7 +2,16 @@
 
 use forge::runtime::error::GraphError;
 use forge::runtime::event::{Event, EventSink};
-use forge::runtime::tool::{ToolCall, ToolDefinition, ToolOutput, ToolRegistry, ToolRunner};
+use forge::runtime::permission::{PermissionPolicy, PermissionSession};
+use forge::runtime::tool::{
+    AttachmentPolicy,
+    ToolCall,
+    ToolContext,
+    ToolDefinition,
+    ToolOutput,
+    ToolRegistry,
+    ToolRunner,
+};
 use futures::executor::block_on;
 
 struct CaptureSink {
@@ -21,7 +30,15 @@ fn tool_runner_reports_success_events() {
     let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
 
     let call = ToolCall::new("echo", "call-1", serde_json::json!({"msg": "hi"}));
-    let result = block_on(ToolRunner::run_with_events(call, sink, |call| async move {
+    let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+    let context = ToolContext::new(
+        Arc::clone(&sink),
+        gate,
+        AttachmentPolicy::default(),
+        call.tool.clone(),
+        call.call_id.clone(),
+    );
+    let result = block_on(ToolRunner::run_with_events(call, context, |call, _ctx| async move {
         Ok(ToolOutput::text(format!("ok:{}", call.tool)))
     }))
     .expect("tool run");
@@ -38,7 +55,15 @@ fn tool_runner_reports_error_events() {
     let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
 
     let call = ToolCall::new("fail", "call-2", serde_json::json!({}));
-    let result = block_on(ToolRunner::run_with_events(call, sink, |_call| async move {
+    let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+    let context = ToolContext::new(
+        Arc::clone(&sink),
+        gate,
+        AttachmentPolicy::default(),
+        call.tool.clone(),
+        call.call_id.clone(),
+    );
+    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
         Err(GraphError::ExecutionError {
             node: "tool:fail".to_string(),
             message: "boom".to_string(),
@@ -58,7 +83,7 @@ fn tool_registry_exposes_definitions() {
     let mut registry = ToolRegistry::new();
     registry.register_with_definition(
         ToolDefinition::new("echo", "Echo input"),
-        Arc::new(|call| Box::pin(async move { Ok(ToolOutput::text(call.tool)) })),
+        Arc::new(|call, _ctx| Box::pin(async move { Ok(ToolOutput::text(call.tool)) })),
     );
 
     let definition = registry.definition("echo").expect("definition");

@@ -32,7 +32,7 @@ fn permission_flow_interrupts_on_ask() {
     let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
 
     let mut registry = ToolRegistry::new();
-    registry.register("echo", Arc::new(|call| {
+    registry.register("echo", Arc::new(|call, _ctx| {
         Box::pin(async move { Ok(ToolOutput::text(call.tool)) })
     }));
     let registry = Arc::new(registry);
@@ -71,7 +71,7 @@ fn permission_flow_records_reply_and_allows() {
     let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
 
     let mut registry = ToolRegistry::new();
-    registry.register("echo", Arc::new(|call| {
+    registry.register("echo", Arc::new(|call, _ctx| {
         Box::pin(async move { Ok(ToolOutput::text(call.tool)) })
     }));
     let registry = Arc::new(registry);
@@ -120,7 +120,7 @@ fn permission_flow_records_reply_and_allows() {
 #[test]
 fn permission_flow_denies_tool() {
     let mut registry = ToolRegistry::new();
-    registry.register("echo", Arc::new(|call| {
+    registry.register("echo", Arc::new(|call, _ctx| {
         Box::pin(async move { Ok(ToolOutput::text(call.tool)) })
     }));
     let registry = Arc::new(registry);
