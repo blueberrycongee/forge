@@ -86,6 +86,7 @@ pub mod platform;
 pub mod session;
 pub mod session_state;
 pub mod r#loop;
+pub mod toolkit;
 
 // Evaluation modules
 pub mod metrics;
@@ -135,6 +136,8 @@ pub use crate::runtime::event::{
     };
     pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
     pub use crate::runtime::session_state::{
+        RunMetadata,
+        RunStatus,
         SessionPhase,
         SessionRouting,
         SessionState,
@@ -154,6 +157,7 @@ pub use crate::runtime::event::{
     };
     pub use crate::runtime::tool::{
         ToolCall,
+        ToolDefinition,
         ToolMetadata,
         ToolOutput,
         ToolRegistry,
@@ -162,11 +166,18 @@ pub use crate::runtime::event::{
         ToolState,
     };
     pub use crate::runtime::r#loop::{LoopContext, LoopNode};
+    pub use crate::runtime::builtin_tool_registry;
 
     // Metrics and evaluation
     
     
     
+}
+
+pub fn builtin_tool_registry(root: impl Into<std::path::PathBuf>) -> tool::ToolRegistry {
+    let mut registry = tool::ToolRegistry::new();
+    toolkit::file_tools::register_file_tools(&mut registry, root);
+    registry
 }
 
 

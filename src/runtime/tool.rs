@@ -35,6 +35,43 @@ impl ToolCall {
     }
 }
 
+/// Describes a tool's input/output contract.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub input_schema: Option<serde_json::Value>,
+    pub output_schema: Option<serde_json::Value>,
+    pub sensitive: bool,
+}
+
+impl ToolDefinition {
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            input_schema: None,
+            output_schema: None,
+            sensitive: false,
+        }
+    }
+
+    pub fn with_input_schema(mut self, schema: serde_json::Value) -> Self {
+        self.input_schema = Some(schema);
+        self
+    }
+
+    pub fn with_output_schema(mut self, schema: serde_json::Value) -> Self {
+        self.output_schema = Some(schema);
+        self
+    }
+
+    pub fn mark_sensitive(mut self) -> Self {
+        self.sensitive = true;
+        self
+    }
+}
+
 /// Typed metadata for tool output.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ToolMetadata {
@@ -206,17 +243,37 @@ pub type ToolHandler =
 #[derive(Default)]
 pub struct ToolRegistry {
     tools: HashMap<String, ToolHandler>,
+    definitions: HashMap<String, ToolDefinition>,
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
+            definitions: HashMap::new(),
         }
     }
 
     pub fn register(&mut self, name: impl Into<String>, handler: ToolHandler) {
         self.tools.insert(name.into(), handler);
+    }
+
+    pub fn register_with_definition(
+        &mut self,
+        definition: ToolDefinition,
+        handler: ToolHandler,
+    ) {
+        let name = definition.name.clone();
+        self.tools.insert(name.clone(), handler);
+        self.definitions.insert(name, definition);
+    }
+
+    pub fn definition(&self, name: &str) -> Option<&ToolDefinition> {
+        self.definitions.get(name)
+    }
+
+    pub fn definitions(&self) -> Vec<ToolDefinition> {
+        self.definitions.values().cloned().collect()
     }
 
     pub fn has(&self, name: &str) -> bool {
