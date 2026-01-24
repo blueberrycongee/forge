@@ -1,8 +1,10 @@
-﻿//! State trait and utilities for LangGraph
+﻿//! State trait and utilities for Forge
 //! 
 //! The state is the shared data structure that nodes read from and write to.
 
 use std::any::Any;
+
+use serde::{Deserialize, Serialize};
 
 /// Trait for graph state
 /// 
@@ -97,6 +99,18 @@ impl DictState {
     pub fn set_value<T: Clone + Send + Sync + 'static>(&mut self, key: &str, value: T) {
         self.values.insert(key.to_string(), Box::new(value));
     }
+
+    pub fn merge_from(&mut self, other: &DictState) {
+        for (key, value) in &other.values {
+            self.values.insert(key.clone(), value.clone());
+        }
+        if other.next.is_some() {
+            self.next = other.next.clone();
+        }
+        if other.complete {
+            self.complete = true;
+        }
+    }
 }
 
 impl GraphState for DictState {
@@ -114,6 +128,45 @@ impl GraphState for DictState {
     
     fn mark_complete(&mut self) {
         self.complete = true;
+    }
+}
+
+/// Shared state for multi-agent workflows.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SharedState {
+    pub data: serde_json::Map<String, serde_json::Value>,
+    pub version: u64,
+}
+
+impl SharedState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_value(key: impl Into<String>, value: serde_json::Value) -> Self {
+        let mut state = Self::new();
+        state.insert(key, value);
+        state
+    }
+
+    pub fn insert(&mut self, key: impl Into<String>, value: serde_json::Value) {
+        self.data.insert(key.into(), value);
+        self.version = self.version.saturating_add(1);
+    }
+
+    pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
+        self.data.get(key)
+    }
+
+    pub fn merge(&self, other: &SharedState) -> SharedState {
+        let mut data = self.data.clone();
+        for (key, value) in &other.data {
+            data.insert(key.clone(), value.clone());
+        }
+        SharedState {
+            data,
+            version: self.version.max(other.version).saturating_add(1),
+        }
     }
 }
 
@@ -186,7 +239,7 @@ impl GraphState for LoopState {
 
 #[cfg(test)]
 mod tests {
-    use super::{GraphState, LoopState};
+    use super::{GraphState, LoopState, SharedState};
 
     #[test]
     fn loop_state_tracks_session_and_routing() {
@@ -206,6 +259,20 @@ mod tests {
 
         state.mark_complete();
         assert!(state.is_complete());
+    }
+
+    #[test]
+    fn shared_state_merges_with_last_writer() {
+        let mut base = SharedState::new();
+        base.insert("plan", serde_json::json!("alpha"));
+        let mut update = SharedState::new();
+        update.insert("plan", serde_json::json!("beta"));
+        update.insert("work", serde_json::json!("done"));
+
+        let merged = base.merge(&update);
+
+        assert_eq!(merged.get("plan"), Some(&serde_json::json!("beta")));
+        assert_eq!(merged.get("work"), Some(&serde_json::json!("done")));
     }
 }
 

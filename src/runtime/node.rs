@@ -1,4 +1,4 @@
-﻿//! Node definitions for LangGraph
+﻿//! Node definitions for Forge
 //! 
 //! A node is a function that takes state and returns updated state.
 
@@ -48,6 +48,7 @@ pub struct NodeSpec<S: GraphState> {
 /// Node metadata for additional configuration
 #[derive(Clone, Default)]
 pub struct NodeMetadata {
+    pub role: Option<String>,
     /// Retry policy
     pub retry_count: usize,
     /// Timeout in milliseconds
@@ -116,7 +117,13 @@ impl<S: GraphState> NodeSpec<S> {
         metadata.retry_count = count;
         self
     }
-    
+
+    pub fn with_role(mut self, role: impl Into<String>) -> Self {
+        let metadata = self.metadata.get_or_insert_with(NodeMetadata::default);
+        metadata.role = Some(role.into());
+        self
+    }
+
     /// Set timeout
     pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
         let metadata = self.metadata.get_or_insert_with(NodeMetadata::default);

@@ -356,3 +356,16 @@ impl<S: GraphState> Default for StateGraph<S> {
     }
 }
 
+pub(crate) fn evaluate_branch<S: GraphState>(
+    branches: &HashMap<String, BranchSpec<S>>,
+    branch_name: &str,
+    state: &S,
+) -> GraphResult<String> {
+    let branch = branches.get(branch_name).ok_or_else(|| GraphError::BranchError {
+        node: branch_name.to_string(),
+        message: "branch not found".to_string(),
+    })?;
+    let result = branch.evaluate(state)?;
+    branch.resolve(&result)
+}
+
