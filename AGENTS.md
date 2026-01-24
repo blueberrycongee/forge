@@ -3,6 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2026-01-25
 
 ## Active Technologies
+- Files (run logs/checkpoints already file-backed; attachments may reference files) (001-tool-context)
 
 - Rust 2021 (edition 2021) + serde, serde_json, uuid, chrono (dev: futures) (001-forge-opencode-orchestration)
 
@@ -22,6 +23,7 @@ cargo test; cargo clippy
 Rust 2021 (edition 2021): Follow standard conventions
 
 ## Recent Changes
+- 001-tool-context: Added Rust 2021 (edition 2021) + serde, serde_json, uuid, chrono (dev: futures)
 
 - 001-forge-opencode-orchestration: Added Rust 2021 (edition 2021) + serde, serde_json, uuid, chrono (dev: futures)
 
