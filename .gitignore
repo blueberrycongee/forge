@@ -13,6 +13,23 @@ Thumbs.db
 # Logs
 *.log
 
+# Env
+.env*
+
+# Temp
+*.tmp
+*.swp
+
 # Docs
 /doc/
 /docs/
+
+# Speckit artifacts
+/.specify/
+/specs/
+
+# Rust extras
+*.rlib
+*.prof*
+debug/
+release/
