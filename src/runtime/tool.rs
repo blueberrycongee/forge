@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::runtime::error::{GraphError, GraphResult, Interrupt};
-use crate::runtime::event::{Event, EventSink};
+use crate::runtime::cancel::CancellationToken;
+use crate::runtime::event::{Event, EventSink, ToolUpdate};
 use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
@@ -116,6 +117,7 @@ pub struct ToolContext {
     attachment_store: Option<Arc<dyn AttachmentStore>>,
     tool: String,
     call_id: String,
+    cancel: CancellationToken,
 }
 
 impl ToolContext {
@@ -133,6 +135,7 @@ impl ToolContext {
             attachment_store: None,
             tool: tool.into(),
             call_id: call_id.into(),
+            cancel: CancellationToken::new(),
         }
     }
 
@@ -153,6 +156,11 @@ impl ToolContext {
         self
     }
 
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.cancel = token;
+        self
+    }
+
     pub fn attachment_store(&self) -> Option<Arc<dyn AttachmentStore>> {
         self.attachment_store.clone()
     }
@@ -161,8 +169,33 @@ impl ToolContext {
         self.sink.emit(event);
     }
 
+    pub fn emit_tool_update(&self, update: ToolUpdate) {
+        self.sink.emit(Event::ToolUpdate {
+            tool: self.tool.clone(),
+            call_id: self.call_id.clone(),
+            update,
+        });
+    }
+
     pub fn sink(&self) -> Arc<dyn EventSink> {
         Arc::clone(&self.sink)
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancel.clone()
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
+    }
+
+    pub fn check_cancelled(&self) -> GraphResult<()> {
+        if self.cancel.is_cancelled() {
+            return Err(GraphError::Aborted {
+                reason: self.cancel.abort_reason(),
+            });
+        }
+        Ok(())
     }
 
     pub fn ask_permission(&self, permission: impl Into<String>) -> GraphResult<()> {
@@ -170,7 +203,12 @@ impl ToolContext {
         match self.gate.decide(&permission) {
             PermissionDecision::Allow => Ok(()),
             PermissionDecision::Ask => {
-                let request = PermissionRequest::new(permission.clone(), vec![permission.clone()]);
+                let mut metadata = serde_json::Map::new();
+                metadata.insert("tool".to_string(), serde_json::json!(self.tool));
+                metadata.insert("call_id".to_string(), serde_json::json!(self.call_id));
+                let request = PermissionRequest::new(permission.clone(), vec![permission.clone()])
+                    .with_metadata(metadata)
+                    .with_always(vec![permission.clone()]);
                 self.emit(request.to_event());
                 Err(GraphError::Interrupted(vec![Interrupt::new(
                     request,

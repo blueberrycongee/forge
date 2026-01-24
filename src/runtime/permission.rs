@@ -67,13 +67,22 @@ struct PermissionOverrides {
 
 impl PermissionOverrides {
     fn decide(&mut self, permission: &str) -> Option<PermissionDecision> {
-        if self.reject.contains(permission) {
+        if self
+            .reject
+            .iter()
+            .any(|pattern| matches_pattern(pattern, permission))
+        {
             return Some(PermissionDecision::Deny);
         }
-        if self.always.contains(permission) {
+        if self
+            .always
+            .iter()
+            .any(|pattern| matches_pattern(pattern, permission))
+        {
             return Some(PermissionDecision::Allow);
         }
-        if self.once.remove(permission) {
+        if let Some(pattern) = best_matching_pattern(&self.once, permission) {
+            self.once.remove(&pattern);
             return Some(PermissionDecision::Allow);
         }
         None
@@ -151,13 +160,43 @@ impl PermissionGate for PermissionSession {
 }
 
 fn matches_pattern(pattern: &str, permission: &str) -> bool {
+    pattern_match_score(pattern, permission).is_some()
+}
+
+fn best_matching_pattern(
+    patterns: &std::collections::HashSet<String>,
+    permission: &str,
+) -> Option<String> {
+    let mut best: Option<(String, (u8, usize))> = None;
+    for pattern in patterns {
+        let Some(score) = pattern_match_score(pattern, permission) else {
+            continue;
+        };
+        let replace = match &best {
+            Some((_, best_score)) => score > *best_score,
+            None => true,
+        };
+        if replace {
+            best = Some((pattern.clone(), score));
+        }
+    }
+    best.map(|(pattern, _)| pattern)
+}
+
+fn pattern_match_score(pattern: &str, permission: &str) -> Option<(u8, usize)> {
     if pattern == "*" {
-        return true;
+        return Some((0, 0));
     }
     if let Some(prefix) = pattern.strip_suffix('*') {
-        return permission.starts_with(prefix);
+        if permission.starts_with(prefix) {
+            return Some((1, prefix.len()));
+        }
+        return None;
     }
-    permission == pattern
+    if permission == pattern {
+        return Some((2, pattern.len()));
+    }
+    None
 }
 
 /// Permission request payload used in interrupts.
@@ -165,6 +204,10 @@ fn matches_pattern(pattern: &str, permission: &str) -> bool {
 pub struct PermissionRequest {
     pub permission: String,
     pub patterns: Vec<String>,
+    #[serde(default)]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    pub always: Vec<String>,
 }
 
 impl PermissionRequest {
@@ -172,13 +215,27 @@ impl PermissionRequest {
         Self {
             permission: permission.into(),
             patterns,
+            metadata: serde_json::Map::new(),
+            always: Vec::new(),
         }
+    }
+
+    pub fn with_metadata(mut self, metadata: serde_json::Map<String, serde_json::Value>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    pub fn with_always(mut self, always: Vec<String>) -> Self {
+        self.always = always;
+        self
     }
 
     pub fn to_event(&self) -> crate::runtime::event::Event {
         crate::runtime::event::Event::PermissionAsked {
             permission: self.permission.clone(),
             patterns: self.patterns.clone(),
+            metadata: self.metadata.clone(),
+            always: self.always.clone(),
         }
     }
 }
@@ -325,6 +382,32 @@ mod tests {
     }
 
     #[test]
+    fn permission_session_allows_pattern_overrides() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:*".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:*", PermissionReply::Always);
+
+        assert_eq!(session.decide("tool:read"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:write"), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn permission_session_once_pattern_consumes_after_first_match() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:*".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:*", PermissionReply::Once);
+
+        assert_eq!(session.decide("tool:read"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:write"), PermissionDecision::Ask);
+    }
+
+    #[test]
     fn permission_session_applies_resume_command() {
         let base = PermissionPolicy::new(vec![PermissionRule::new(
             PermissionDecision::Ask,
@@ -341,13 +424,28 @@ mod tests {
 
     #[test]
     fn permission_request_roundtrip() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert("tool".to_string(), serde_json::json!({"name": "echo"}));
         let request = PermissionRequest {
             permission: "tool:echo".to_string(),
             patterns: vec!["tool:echo".to_string()],
+            metadata,
+            always: vec!["tool:*".to_string()],
         };
         let json = serde_json::to_value(&request).expect("serialize");
         let decoded: PermissionRequest = serde_json::from_value(json).expect("deserialize");
         assert_eq!(request, decoded);
+    }
+
+    #[test]
+    fn permission_request_defaults_missing_fields() {
+        let json = serde_json::json!({
+            "permission": "tool:echo",
+            "patterns": ["tool:echo"]
+        });
+        let decoded: PermissionRequest = serde_json::from_value(json).expect("deserialize");
+        assert!(decoded.metadata.is_empty());
+        assert!(decoded.always.is_empty());
     }
 
     #[test]

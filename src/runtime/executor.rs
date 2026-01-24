@@ -10,6 +10,7 @@ use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 
 use crate::runtime::constants::{START, END, MAX_ITERATIONS};
+use crate::runtime::cancel::CancellationToken;
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
 use crate::runtime::state::GraphState;
 use crate::runtime::graph::{evaluate_branch, Edge, StateGraph};
@@ -295,6 +296,7 @@ pub struct ToolExecutor {
     sink: Arc<dyn EventSink>,
     attachment_policy: AttachmentPolicy,
     attachment_store: Option<Arc<dyn AttachmentStore>>,
+    cancel: CancellationToken,
 }
 
 impl ToolExecutor {
@@ -304,6 +306,7 @@ impl ToolExecutor {
         sink: Arc<dyn EventSink>,
         attachment_policy: AttachmentPolicy,
         attachment_store: Option<Arc<dyn AttachmentStore>>,
+        cancel: CancellationToken,
     ) -> Self {
         Self {
             tools,
@@ -311,10 +314,16 @@ impl ToolExecutor {
             sink,
             attachment_policy,
             attachment_store,
+            cancel,
         }
     }
 
     pub async fn run(&self, call: ToolCall) -> GraphResult<ToolOutput> {
+        if self.cancel.is_cancelled() {
+            return Err(GraphError::Aborted {
+                reason: self.cancel.abort_reason(),
+            });
+        }
         let permission = format!("tool:{}", call.tool);
         match self.gate.decide(&permission) {
             PermissionDecision::Allow => {
@@ -324,14 +333,21 @@ impl ToolExecutor {
                     self.attachment_policy.clone(),
                     call.tool.clone(),
                     call.call_id.clone(),
-                );
+                )
+                .with_cancellation_token(self.cancel.clone());
                 if let Some(store) = &self.attachment_store {
                     context = context.with_attachment_store(Arc::clone(store));
                 }
                 self.tools.run_with_events(call, context).await
             }
             PermissionDecision::Ask => {
-                let request = PermissionRequest::new(permission.clone(), vec![permission.clone()]);
+                let mut metadata = serde_json::Map::new();
+                metadata.insert("tool".to_string(), serde_json::json!(call.tool));
+                metadata.insert("call_id".to_string(), serde_json::json!(call.call_id));
+                metadata.insert("input".to_string(), call.input.clone());
+                let request = PermissionRequest::new(permission.clone(), vec![permission.clone()])
+                    .with_metadata(metadata)
+                    .with_always(vec![permission.clone()]);
                 self.sink.emit(request.to_event());
                 Err(GraphError::Interrupted(vec![Interrupt::new(
                     request,

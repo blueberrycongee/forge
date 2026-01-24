@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::runtime::session_state::{RunStatus, SessionPhase};
-use crate::runtime::tool::{ToolAttachment, ToolOutput, ToolState};
+use crate::runtime::tool::{ToolAttachment, ToolMetadata, ToolOutput, ToolState};
 
 /// Token usage breakdown (input/output/reasoning/cache).
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -27,6 +27,36 @@ pub enum PermissionReply {
     Once,
     Always,
     Reject,
+}
+
+/// Tool update payload for streaming tool output or metadata.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ToolUpdate {
+    /// Incremental tool output (stdout/stderr/etc).
+    OutputDelta {
+        delta: String,
+        stream: Option<String>,
+    },
+    /// Preview payload when output is truncated.
+    OutputPreview {
+        preview: serde_json::Value,
+        truncated: bool,
+    },
+    /// Tool metadata update (full payload).
+    Metadata {
+        metadata: ToolMetadata,
+    },
+    /// Progress updates for long-running tools.
+    Progress {
+        current: u64,
+        total: Option<u64>,
+        unit: Option<String>,
+        message: Option<String>,
+    },
+    /// Custom tool update payloads.
+    Custom {
+        data: serde_json::Value,
+    },
 }
 
 /// Event metadata for protocol-level fields.
@@ -167,6 +197,11 @@ pub enum Event {
         call_id: String,
         input: serde_json::Value,
     },
+    ToolUpdate {
+        tool: String,
+        call_id: String,
+        update: ToolUpdate,
+    },
     ToolResult {
         tool: String,
         call_id: String,
@@ -198,6 +233,10 @@ pub enum Event {
     PermissionAsked {
         permission: String,
         patterns: Vec<String>,
+        #[serde(default)]
+        metadata: serde_json::Map<String, serde_json::Value>,
+        #[serde(default)]
+        always: Vec<String>,
     },
     PermissionReplied {
         permission: String,
@@ -247,6 +286,29 @@ mod tests {
         match event {
             Event::ToolStatus { state, .. } => assert_eq!(state, ToolState::Running),
             _ => panic!("expected tool status event"),
+        }
+    }
+
+    #[test]
+    fn tool_update_event_can_be_emitted() {
+        let event = Event::ToolUpdate {
+            tool: "bash".to_string(),
+            call_id: "call-2".to_string(),
+            update: super::ToolUpdate::OutputDelta {
+                delta: "line".to_string(),
+                stream: Some("stdout".to_string()),
+            },
+        };
+
+        match event {
+            Event::ToolUpdate { update, .. } => match update {
+                super::ToolUpdate::OutputDelta { delta, stream } => {
+                    assert_eq!(delta, "line");
+                    assert_eq!(stream.as_deref(), Some("stdout"));
+                }
+                _ => panic!("expected output delta"),
+            },
+            _ => panic!("expected tool update event"),
         }
     }
 

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::runtime::event::{Event, TokenUsage};
-use crate::runtime::tool::ToolOutput;
+use crate::runtime::tool::{ToolAttachment, ToolOutput};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MessageRole {
@@ -69,6 +69,11 @@ pub enum Part {
         call_id: String,
         output: ToolOutput,
     },
+    ToolAttachment {
+        tool: String,
+        call_id: String,
+        attachment: ToolAttachment,
+    },
     ToolError {
         tool: String,
         call_id: String,
@@ -123,6 +128,15 @@ impl Part {
                 call_id: call_id.clone(),
                 output: output.clone(),
             }),
+            Event::ToolAttachment {
+                tool,
+                call_id,
+                attachment,
+            } => Some(Part::ToolAttachment {
+                tool: tool.clone(),
+                call_id: call_id.clone(),
+                attachment: attachment.clone(),
+            }),
             Event::ToolError {
                 tool,
                 call_id,
@@ -142,7 +156,7 @@ impl Part {
 mod tests {
     use super::{Message, MessageRole, Part};
     use crate::runtime::event::{Event, TokenUsage};
-    use crate::runtime::tool::ToolOutput;
+    use crate::runtime::tool::{ToolAttachment, ToolOutput};
 
     #[test]
     fn message_new_initializes_empty_parts_and_metadata() {
@@ -258,6 +272,29 @@ mod tests {
     }
 
     #[test]
+    fn part_from_event_maps_tool_attachment() {
+        let attachment = ToolAttachment::inline(
+            "report.json",
+            "application/json",
+            serde_json::json!({"ok": true}),
+        );
+        let event = Event::ToolAttachment {
+            tool: "read".to_string(),
+            call_id: "c3".to_string(),
+            attachment: attachment.clone(),
+        };
+
+        assert_eq!(
+            Part::from_event(&event),
+            Some(Part::ToolAttachment {
+                tool: "read".to_string(),
+                call_id: "c3".to_string(),
+                attachment,
+            })
+        );
+    }
+
+    #[test]
     fn part_from_event_maps_token_usage() {
         let event = Event::StepFinish {
             session_id: "s2".to_string(),
@@ -290,6 +327,8 @@ mod tests {
         let event = Event::PermissionAsked {
             permission: "fs.read".to_string(),
             patterns: vec!["*".to_string()],
+            metadata: serde_json::Map::new(),
+            always: Vec::new(),
         };
 
         assert_eq!(Part::from_event(&event), None);

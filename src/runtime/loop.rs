@@ -1,5 +1,6 @@
 ﻿use std::sync::{Arc, Mutex};
 
+use crate::runtime::cancel::CancellationToken;
 use crate::runtime::event::{Event, EventSink};
 use crate::runtime::error::{GraphResult, ResumeCommand};
 use crate::runtime::message::MessageRole;
@@ -22,6 +23,7 @@ pub struct LoopContext {
     gate: Arc<PermissionSession>,
     attachment_policy: AttachmentPolicy,
     attachment_store: Option<Arc<dyn AttachmentStore>>,
+    cancel: CancellationToken,
 }
 
 impl LoopContext {
@@ -54,11 +56,17 @@ impl LoopContext {
             gate,
             attachment_policy,
             attachment_store: Some(default_attachment_store()),
+            cancel: CancellationToken::new(),
         }
     }
 
     pub fn emit(&self, event: Event) {
         self.sink.emit(event);
+    }
+
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.cancel = token;
+        self
     }
 
     pub fn reply_permission(
@@ -93,6 +101,7 @@ impl LoopContext {
             Arc::clone(&self.sink),
             self.attachment_policy.clone(),
             self.attachment_store.clone(),
+            self.cancel.clone(),
         );
         executor.run(call).await
     }
@@ -107,6 +116,7 @@ pub struct LoopNode<S: GraphState> {
     tools: Arc<ToolRegistry>,
     gate: Arc<PermissionSession>,
     attachment_policy: AttachmentPolicy,
+    cancel: CancellationToken,
     handler: Arc<
         dyn Fn(S, LoopContext) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>>
             + Send
@@ -129,6 +139,11 @@ impl<S: GraphState> LoopNode<S> {
             AttachmentPolicy::default(),
             handler,
         )
+    }
+
+    pub fn with_cancel_token(mut self, token: CancellationToken) -> Self {
+        self.cancel = token;
+        self
     }
 
     pub fn with_tools<F, Fut>(
@@ -185,6 +200,7 @@ impl<S: GraphState> LoopNode<S> {
             tools,
             gate,
             attachment_policy,
+            cancel: CancellationToken::new(),
             handler: Arc::new(move |state, ctx| Box::pin(handler(state, ctx))),
         }
     }
@@ -193,13 +209,18 @@ impl<S: GraphState> LoopNode<S> {
         &self.name
     }
 
-    pub fn run(&self, state: S, sink: Arc<dyn EventSink>) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
+    pub fn run(
+        &self,
+        state: S,
+        sink: Arc<dyn EventSink>,
+    ) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
         let ctx = LoopContext::new_with_gate_and_policy(
             sink,
             Arc::clone(&self.tools),
             Arc::clone(&self.gate),
             self.attachment_policy.clone(),
-        );
+        )
+        .with_cancellation_token(self.cancel.clone());
         (self.handler)(state, ctx)
     }
 
@@ -237,13 +258,15 @@ impl<S: GraphState> LoopNode<S> {
         let tools = Arc::clone(&self.tools);
         let gate = Arc::clone(&self.gate);
         let attachment_policy = self.attachment_policy.clone();
+        let cancel = self.cancel.clone();
         NodeSpec::new_stream(self.name, move |state, sink| {
             let ctx = LoopContext::new_with_gate_and_policy(
                 sink,
                 Arc::clone(&tools),
                 Arc::clone(&gate),
                 attachment_policy.clone(),
-            );
+            )
+            .with_cancellation_token(cancel.clone());
             handler(state, ctx)
         })
     }
@@ -632,3 +655,13 @@ mod tests {
         assert!(session_state.messages.is_empty());
     }
 }
+
+
+
+
+
+
+
+
+
+

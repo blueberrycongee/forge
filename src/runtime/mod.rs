@@ -68,6 +68,7 @@
 // Core modules
 pub mod constants;
 pub mod error;
+pub mod cancel;
 pub mod state;
 pub mod node;
 pub mod branch;
@@ -98,6 +99,7 @@ pub mod prelude {
     // Core types
     pub use crate::runtime::constants::END;
     pub use crate::runtime::error::GraphError;
+    pub use crate::runtime::cancel::CancellationToken;
     
     
     
@@ -113,6 +115,7 @@ pub use crate::runtime::event::{
     NoopEventRecordSink,
     NoopEventSink,
     PermissionReply,
+    ToolUpdate,
     TokenUsage,
 };
     pub use crate::runtime::message::{Message, MessageRole, Part};
@@ -134,7 +137,12 @@ pub use crate::runtime::event::{
         stream_sse_events,
         stream_sse_records,
     };
-    pub use crate::runtime::session::{SessionMessage, SessionSnapshot, SessionSnapshotIo};
+    pub use crate::runtime::session::{
+        AttachmentResolver,
+        SessionMessage,
+        SessionSnapshot,
+        SessionSnapshotIo,
+    };
     pub use crate::runtime::session_state::{
         RunMetadata,
         RunStatus,

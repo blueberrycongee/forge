@@ -1,7 +1,7 @@
 ﻿use std::sync::{Arc, Mutex};
 
 use forge::runtime::error::GraphError;
-use forge::runtime::event::{Event, EventSink};
+use forge::runtime::event::{Event, EventSink, ToolUpdate};
 use forge::runtime::permission::{PermissionPolicy, PermissionSession};
 use forge::runtime::tool::{
     AttachmentPolicy,
@@ -47,6 +47,33 @@ fn tool_runner_reports_success_events() {
     let captured = events.lock().unwrap();
     assert!(captured.iter().any(|event| matches!(event, Event::ToolStart { .. })));
     assert!(captured.iter().any(|event| matches!(event, Event::ToolResult { .. })));
+}
+
+#[test]
+fn tool_context_emits_tool_update() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+
+    let call = ToolCall::new("echo", "call-3", serde_json::json!({}));
+    let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+    let context = ToolContext::new(
+        Arc::clone(&sink),
+        gate,
+        AttachmentPolicy::default(),
+        call.tool.clone(),
+        call.call_id.clone(),
+    );
+    context.emit_tool_update(ToolUpdate::OutputDelta {
+        delta: "hi".to_string(),
+        stream: Some("stdout".to_string()),
+    });
+
+    let captured = events.lock().unwrap();
+    assert!(captured.iter().any(|event| matches!(
+        event,
+        Event::ToolUpdate { tool, call_id, update: ToolUpdate::OutputDelta { delta, stream } }
+            if tool == "echo" && call_id == "call-3" && delta == "hi" && stream.as_deref() == Some("stdout")
+    )));
 }
 
 #[test]

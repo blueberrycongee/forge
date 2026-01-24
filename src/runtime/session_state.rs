@@ -403,6 +403,11 @@ impl SessionState {
                 call_id,
                 attachment,
             } => {
+                self.pending_parts.push(Part::ToolAttachment {
+                    tool: tool.clone(),
+                    call_id: call_id.clone(),
+                    attachment: attachment.clone(),
+                });
                 self.tool_attachments.push(ToolAttachmentRecord::new(
                     tool.clone(),
                     call_id.clone(),
@@ -471,7 +476,7 @@ mod tests {
     use super::{SessionPhase, SessionRouting, SessionState, ToolCallStatus};
     use crate::runtime::event::{Event, TokenUsage};
     use crate::runtime::message::{MessageRole, Part};
-    use crate::runtime::tool::ToolOutput;
+    use crate::runtime::tool::{ToolAttachment, ToolOutput};
 
     #[test]
     fn session_state_new_initializes_fields() {
@@ -757,6 +762,8 @@ mod tests {
         let event = Event::PermissionAsked {
             permission: "fs.read".to_string(),
             patterns: vec!["*".to_string()],
+            metadata: serde_json::Map::new(),
+            always: Vec::new(),
         };
 
         assert!(state.apply_event(&event));
@@ -784,6 +791,8 @@ mod tests {
         let event = Event::PermissionAsked {
             permission: "fs.read".to_string(),
             patterns: vec!["*".to_string()],
+            metadata: serde_json::Map::new(),
+            always: Vec::new(),
         };
 
         assert!(state.apply_event(&event));
@@ -869,6 +878,8 @@ mod tests {
         let event = Event::PermissionAsked {
             permission: "fs.read".to_string(),
             patterns: vec!["*".to_string()],
+            metadata: serde_json::Map::new(),
+            always: Vec::new(),
         };
 
         let (handled, events) = state.apply_event_with_events(&event);
@@ -1003,6 +1014,35 @@ mod tests {
                 data: serde_json::json!({"size": 4}),
             }]
         );
+    }
+
+    #[test]
+    fn session_state_apply_event_appends_tool_attachment() {
+        let mut state = SessionState::new("s1", "m1");
+        let attachment = ToolAttachment::inline(
+            "report.json",
+            "application/json",
+            serde_json::json!({"ok": true}),
+        );
+        let event = Event::ToolAttachment {
+            tool: "read".to_string(),
+            call_id: "c9".to_string(),
+            attachment: attachment.clone(),
+        };
+
+        assert!(state.apply_event(&event));
+        assert_eq!(
+            state.pending_parts,
+            vec![Part::ToolAttachment {
+                tool: "read".to_string(),
+                call_id: "c9".to_string(),
+                attachment: attachment.clone(),
+            }]
+        );
+        assert_eq!(state.tool_attachments.len(), 1);
+        assert_eq!(state.tool_attachments[0].tool, "read");
+        assert_eq!(state.tool_attachments[0].call_id, "c9");
+        assert_eq!(state.tool_attachments[0].attachment, attachment);
     }
 
     #[test]

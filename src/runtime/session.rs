@@ -393,13 +393,68 @@ impl AttachmentStore for FileAttachmentStore {
     }
 }
 
+/// Resolves attachment references persisted by `FileAttachmentStore`.
+pub struct AttachmentResolver {
+    store: FileAttachmentStore,
+}
+
+impl AttachmentResolver {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self {
+            store: FileAttachmentStore::new(root),
+        }
+    }
+
+    pub fn resolve_reference(&self, reference: &str) -> std::io::Result<AttachmentRecord> {
+        let attachment_id = Self::parse_reference(reference).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "invalid attachment reference",
+            )
+        })?;
+        self.store.load(attachment_id)
+    }
+
+    pub fn resolve_id(&self, attachment_id: &str) -> std::io::Result<AttachmentRecord> {
+        let attachment_id = Self::validate_id(attachment_id).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "invalid attachment id",
+            )
+        })?;
+        self.store.load(attachment_id)
+    }
+
+    pub fn parse_reference(reference: &str) -> Option<&str> {
+        let attachment_id = reference.strip_prefix("attachment://")?;
+        Self::validate_id(attachment_id)
+    }
+
+    fn validate_id(attachment_id: &str) -> Option<&str> {
+        if attachment_id.is_empty() {
+            return None;
+        }
+        let mut components = std::path::Path::new(attachment_id).components();
+        match components.next() {
+            Some(std::path::Component::Normal(_)) => {
+                if components.next().is_none() {
+                    Some(attachment_id)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
+    use super::{AttachmentResolver, SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
     use crate::runtime::compaction::CompactionResult;
     use crate::runtime::message::{Message, MessageRole, Part};
     use crate::runtime::trace::{ExecutionTrace, TraceEvent};
-    use crate::runtime::tool::ToolOutput;
+    use crate::runtime::tool::{AttachmentStore, ToolAttachment, ToolOutput};
 
     #[test]
     fn session_snapshot_roundtrip() {
@@ -615,5 +670,30 @@ mod tests {
         snapshot.push_message(&message);
 
         assert!(snapshot.messages.is_empty());
+    }
+
+    #[test]
+    fn attachment_resolver_loads_reference_payload() {
+        let temp = std::env::temp_dir().join(format!("forge-attach-{}", uuid::Uuid::new_v4()));
+        let store = super::FileAttachmentStore::new(temp.clone());
+        let attachment = ToolAttachment::inline(
+            "notes.txt",
+            "text/plain",
+            serde_json::json!({"ok": true}),
+        );
+        let reference = store.store(&attachment).expect("store");
+
+        let resolver = AttachmentResolver::new(temp);
+        let record = resolver.resolve_reference(&reference).expect("resolve");
+
+        assert_eq!(record.attachment, attachment);
+        assert_eq!(AttachmentResolver::parse_reference(&reference), Some(record.attachment_id.as_str()));
+    }
+
+    #[test]
+    fn attachment_resolver_rejects_invalid_references() {
+        assert!(AttachmentResolver::parse_reference("attachment://").is_none());
+        assert!(AttachmentResolver::parse_reference("attachment://../bad").is_none());
+        assert!(AttachmentResolver::parse_reference("http://bad").is_none());
     }
 }

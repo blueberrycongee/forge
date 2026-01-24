@@ -57,7 +57,9 @@ fn is_tool_event(event: &Event) -> bool {
     matches!(
         event,
         Event::ToolStart { .. }
+            | Event::ToolUpdate { .. }
             | Event::ToolResult { .. }
+            | Event::ToolAttachment { .. }
             | Event::ToolError { .. }
             | Event::ToolStatus { .. }
     )

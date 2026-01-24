@@ -56,6 +56,7 @@ pub fn event_name(event: &Event) -> &'static str {
         Event::Attachment { .. } => "attachment",
         Event::Error { .. } => "error",
         Event::ToolStart { .. } => "tool_start",
+        Event::ToolUpdate { .. } => "tool_update",
         Event::ToolResult { .. } => "tool_result",
         Event::ToolAttachment { .. } => "tool_attachment",
         Event::ToolError { .. } => "tool_error",
