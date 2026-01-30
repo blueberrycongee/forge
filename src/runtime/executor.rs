@@ -14,7 +14,7 @@ use crate::runtime::cancel::CancellationToken;
 use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
 use crate::runtime::state::GraphState;
 use crate::runtime::graph::{evaluate_branch, Edge, StateGraph};
-use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSequencer, EventSink};
+use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSequencer, EventSink, TokenUsage};
 use crate::runtime::compaction::{
     CompactionContext,
     CompactionHook,
@@ -552,7 +552,8 @@ impl<S: GraphState> CompiledGraph<S> {
         let mut iterations = 0;
         let use_history = self.config.prune_policy.enabled
             || self.config.event_history.is_some()
-            || self.config.event_record_sink.is_some();
+            || self.config.event_record_sink.is_some()
+            || self.config.compaction_policy.requires_token_usage();
         let history = self
             .config
             .event_history
@@ -615,14 +616,25 @@ impl<S: GraphState> CompiledGraph<S> {
                 prune_tool_events(&mut events, &self.config.prune_policy);
             }
 
+            let session_id = resolve_session_id(&state);
             let message_count = resolve_message_count(&snapshot, &history);
-            if self.config.compaction_policy.should_compact(message_count) {
+            let token_usage = if self.config.compaction_policy.requires_token_usage() {
+                resolve_latest_token_usage(&history, &session_id)
+            } else {
+                None
+            };
+            let token_total = token_usage.as_ref().map(token_usage_total);
+
+            if self
+                .config
+                .compaction_policy
+                .should_compact_with_usage(message_count, token_total)
+            {
                 let messages = collect_compaction_messages(&snapshot);
                 let context = CompactionContext::new(messages);
                 if let Some(summary) = self.config.compaction_hook.before_compaction(&context) {
                     let result = CompactionResult::new(summary, 0);
                     self.config.compaction_hook.after_compaction(&result);
-                    let session_id = resolve_session_id(&state);
                     if let Some(trace) = &trace {
                         trace.lock().unwrap().record_event(TraceEvent::Compacted {
                             summary: result.summary.clone(),
@@ -636,6 +648,14 @@ impl<S: GraphState> CompiledGraph<S> {
                         session_id,
                         summary: result.summary,
                         truncated_before: result.truncated_before,
+                    });
+                } else {
+                    sink.emit(crate::runtime::event::Event::SessionCompactionRequested {
+                        session_id,
+                        message_count,
+                        tokens: token_usage.unwrap_or_default(),
+                        context_window: self.config.compaction_policy.context_window,
+                        threshold_ratio: self.config.compaction_policy.token_ratio,
                     });
                 }
             }
@@ -983,6 +1003,29 @@ fn resolve_message_count(
         return snapshot.lock().unwrap().messages.len();
     }
     history.lock().unwrap().len()
+}
+
+fn resolve_latest_token_usage(
+    history: &Arc<std::sync::Mutex<Vec<EventRecord>>>,
+    session_id: &str,
+) -> Option<TokenUsage> {
+    let events = history.lock().unwrap();
+    for record in events.iter().rev() {
+        if let Event::StepFinish { session_id: event_session_id, tokens, .. } = &record.event {
+            if event_session_id == session_id {
+                return Some(tokens.clone());
+            }
+        }
+    }
+    None
+}
+
+fn token_usage_total(tokens: &TokenUsage) -> u64 {
+    tokens.input
+        + tokens.output
+        + tokens.reasoning
+        + tokens.cache_read
+        + tokens.cache_write
 }
 
 fn collect_compaction_messages(

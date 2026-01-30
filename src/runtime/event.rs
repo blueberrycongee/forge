@@ -247,6 +247,13 @@ pub enum Event {
         summary: String,
         truncated_before: usize,
     },
+    SessionCompactionRequested {
+        session_id: String,
+        message_count: usize,
+        tokens: TokenUsage,
+        context_window: Option<u64>,
+        threshold_ratio: Option<f64>,
+    },
     SessionPhaseChanged {
         session_id: String,
         message_id: String,

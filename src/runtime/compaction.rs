@@ -1,22 +1,113 @@
 ﻿//! Compaction policy and result types.
 
 /// Compaction trigger policy.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CompactionPolicy {
-    pub max_messages: usize,
+    /// Trigger based on message count.
+    pub max_messages: Option<usize>,
+    /// Trigger based on absolute token count.
+    pub max_tokens: Option<u64>,
+    /// Trigger based on context window ratio (e.g. 0.95).
+    pub token_ratio: Option<f64>,
+    /// Context window size used with `token_ratio`.
+    pub context_window: Option<u64>,
+    /// Whether compaction is enabled.
     pub enabled: bool,
+}
+
+impl Default for CompactionPolicy {
+    fn default() -> Self {
+        Self {
+            max_messages: None,
+            max_tokens: None,
+            token_ratio: None,
+            context_window: None,
+            enabled: false,
+        }
+    }
 }
 
 impl CompactionPolicy {
     pub fn new(max_messages: usize) -> Self {
         Self {
-            max_messages,
+            max_messages: Some(max_messages),
+            max_tokens: None,
+            token_ratio: None,
+            context_window: None,
             enabled: true,
         }
     }
 
+    pub fn token_ratio(context_window: u64, ratio: f64) -> Self {
+        Self {
+            max_messages: None,
+            max_tokens: None,
+            token_ratio: Some(ratio),
+            context_window: Some(context_window),
+            enabled: true,
+        }
+    }
+
+    pub fn with_context_window(mut self, context_window: u64) -> Self {
+        self.context_window = Some(context_window);
+        self
+    }
+
+    pub fn with_token_ratio(mut self, ratio: f64) -> Self {
+        self.token_ratio = Some(ratio);
+        self
+    }
+
+    pub fn with_max_tokens(mut self, max_tokens: u64) -> Self {
+        self.max_tokens = Some(max_tokens);
+        self
+    }
+
     pub fn should_compact(&self, message_count: usize) -> bool {
-        self.enabled && message_count > self.max_messages
+        self.enabled
+            && self
+                .max_messages
+                .map(|max| message_count > max)
+                .unwrap_or(false)
+    }
+
+    pub fn should_compact_with_usage(
+        &self,
+        message_count: usize,
+        token_total: Option<u64>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        let message_trigger = self
+            .max_messages
+            .map(|max| message_count > max)
+            .unwrap_or(false);
+
+        let token_threshold = self.resolve_token_threshold();
+        let token_trigger = match (token_threshold, token_total) {
+            (Some(threshold), Some(total)) => total >= threshold,
+            _ => false,
+        };
+
+        message_trigger || token_trigger
+    }
+
+    pub fn requires_token_usage(&self) -> bool {
+        self.enabled && (self.max_tokens.is_some() || (self.token_ratio.is_some() && self.context_window.is_some()))
+    }
+
+    pub fn resolve_token_threshold(&self) -> Option<u64> {
+        if let Some(max_tokens) = self.max_tokens {
+            return Some(max_tokens);
+        }
+        let ratio = self.token_ratio?;
+        let window = self.context_window?;
+        if ratio <= 0.0 {
+            return None;
+        }
+        Some(((window as f64) * ratio).floor() as u64)
     }
 }
 
@@ -87,6 +178,13 @@ mod tests {
         let policy = CompactionPolicy::new(3);
         assert!(!policy.should_compact(3));
         assert!(policy.should_compact(4));
+    }
+
+    #[test]
+    fn compaction_policy_token_ratio_threshold() {
+        let policy = CompactionPolicy::token_ratio(100, 0.95);
+        assert!(!policy.should_compact_with_usage(0, Some(94)));
+        assert!(policy.should_compact_with_usage(0, Some(95)));
     }
 
     #[test]
