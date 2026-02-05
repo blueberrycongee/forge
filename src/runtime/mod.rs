@@ -85,6 +85,7 @@ pub mod tool;
 pub mod trace;
 pub mod output;
 pub mod platform;
+pub mod provider;
 pub mod session;
 pub mod session_state;
 pub mod r#loop;
@@ -150,6 +151,10 @@ pub use crate::runtime::event::{
         stream_sse_events,
         stream_sse_records,
     };
+    pub use crate::runtime::provider::openai::{
+        OpenAiChatModel,
+        OpenAiChatModelConfig,
+    };
     pub use crate::runtime::session::{
         AttachmentResolver,
         SessionMessage,
@@ -200,4 +205,3 @@ pub fn builtin_tool_registry(root: impl Into<std::path::PathBuf>) -> tool::ToolR
     toolkit::file_tools::register_file_tools(&mut registry, root);
     registry
 }
-
