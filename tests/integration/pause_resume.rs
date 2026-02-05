@@ -49,8 +49,9 @@ struct CaptureSink {
 }
 
 impl EventSink for CaptureSink {
-    fn emit(&self, event: Event) {
+    fn emit(&self, event: Event) -> Result<(), GraphError> {
         self.events.lock().unwrap().push(event);
+        Ok(())
     }
 }
 

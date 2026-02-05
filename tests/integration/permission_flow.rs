@@ -21,8 +21,9 @@ struct CaptureSink {
 }
 
 impl EventSink for CaptureSink {
-    fn emit(&self, event: Event) {
+    fn emit(&self, event: Event) -> Result<(), GraphError> {
         self.events.lock().unwrap().push(event);
+        Ok(())
     }
 }
 
@@ -85,7 +86,7 @@ fn permission_flow_records_reply_and_allows() {
         Arc::clone(&registry),
         Arc::clone(&gate),
         |mut state: FlowState, ctx| async move {
-            ctx.reply_permission("tool:echo", PermissionReply::Once);
+            ctx.reply_permission("tool:echo", PermissionReply::Once)?;
             let output = ctx
                 .run_tool(ToolCall::new("echo", "call-2", serde_json::json!({})))
                 .await?;
