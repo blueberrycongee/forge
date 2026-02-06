@@ -2,41 +2,45 @@
 
 Language: [English README](README.md) | 中文
 
-Forge 是一个 Rust 框架，用于构建有状态、事件驱动的 Agent 运行时。
-它强调流式执行、工具生命周期、权限控制，以及可审计的可观测性。
+[![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-active%20development-yellow.svg)](#项目状态)
 
-## 状态
+Forge 是一个面向 Rust 的 Agent 编排运行时，适合构建长时运行、有状态的工作流。
+它关注可恢复的图执行、事件流协议、工具生命周期、权限治理，以及基于检查点的中断/恢复。
 
-处于活跃开发中，API 仍可能变化。
+## 概览
 
-## 为什么是 Forge
+Forge 提供的是底层运行时能力，不预设提示词风格、Agent 架构或工具命名方式。
 
-- **默认流式**：文本、工具、权限、压缩、运行生命周期等事件统一输出。
-- **工具驱动编排**：面向 LLM ↔ 工具的循环抽象，不强制工具命名。
-- **安全可控**：权限策略与恢复流，便于 human-in-the-loop。
-- **可追溯会话**：快照、检查点与回放，方便审计与调试。
+当你需要以下能力时，可以选择 Forge：
 
-## 核心概念
+- 在图节点间进行显式状态迁移
+- 用结构化事件支持 UI/CLI 流式输出和审计日志
+- 对工具调用应用权限与附件策略
+- 在 human-in-the-loop 与失败恢复场景中继续执行
 
-- **StateGraph / CompiledGraph**：以图节点编排异步流程。
-- **LoopNode / LoopContext**：可调用工具、输出事件并支持中断恢复的循环。
-- **ToolRegistry / ToolDefinition / ToolOutput**：工具契约、生命周期事件与结构化输出。
-- **PermissionPolicy / PermissionSession**：allow/ask/deny 权限决策与恢复。
-- **事件输出**：JSONL / SSE 等事件流输出。
-- **SessionState / Trace**：运行状态、Token 统计与可回放追踪。
+## 核心能力
+
+- 可恢复执行：将状态图编译为可断点恢复的执行计划。
+- 事件流协议：统一输出文本、工具、权限、压缩与运行生命周期事件。
+- 工具优先运行循环：以生命周期元数据编排 LLM 到工具的交互。
+- 权限系统：支持 allow/ask/deny 与会话级决策持久化。
+- 会话模型：快照、回放追踪与运行元数据，便于调试和审计。
+- Provider 适配：内置 OpenAI `ChatModel` 适配器（`runtime::provider::openai`）。
 
 ## 安装
 
-Forge 目前尚未发布到 crates.io，请使用 git 依赖：
+Forge 目前尚未发布到 crates.io，请使用 Git 依赖并固定 commit：
 
 ```toml
 [dependencies]
 forge = { git = "https://github.com/blueberrycongee/forge", rev = "<commit>" }
 ```
 
-建议固定 `rev` 以确保构建可复现。待发布 tag 或 crates.io 版本后可切换。
+## 快速开始
 
-## 快速开始：StateGraph
+### 1) 构建 StateGraph
 
 ```rust
 use forge::runtime::constants::START;
@@ -68,7 +72,7 @@ assert_eq!(result.count, 1);
 # }
 ```
 
-## 快速开始：工具 + LoopNode
+### 2) 使用权限控制运行工具循环
 
 ```rust
 use forge::runtime::permission::{PermissionPolicy, PermissionSession};
@@ -130,31 +134,67 @@ let _ = compiled.invoke(State::default()).await?;
 # }
 ```
 
-## 事件流输出
+### 3) 使用 OpenAI Provider 适配器
 
-Forge 通过 `EventSink` 输出结构化事件，内置：
+```rust
+use forge::runtime::prelude::{ChatModel, ChatRequest, Message, MessageRole, OpenAiChatModel, OpenAiChatModelConfig, Part};
+use futures::executor::block_on;
 
-- `JsonLineEventSink` / `JsonLineEventRecordSink`
-- `SseEventSink` / `SseEventRecordSink`
+let model = OpenAiChatModel::new(OpenAiChatModelConfig::new("gpt-4o-mini"))?;
+let mut msg = Message::new(MessageRole::User);
+msg.parts.push(Part::TextFinal { text: "Say hi in one short sentence.".to_string() });
+let req = ChatRequest::new("session-1", "message-1", vec![msg]);
 
-位于 `forge::runtime::output`。
-
-## 目录结构
-
-```text
-src/
-  runtime/
-    graph.rs          # StateGraph 与路由
-    executor.rs       # 执行引擎与检查点
-    loop.rs           # LoopNode / LoopContext
-    tool.rs           # 工具与生命周期
-    permission.rs     # 权限策略
-    event.rs          # 事件协议
-    session_state.rs  # 运行状态与 reducer
-    session.rs        # 快照与附件存储
-    trace.rs          # Trace / Replay
-tests/
+let resp = block_on(model.generate(req))?;
+println!("model={:?} text={:?}", resp.model, resp.text());
+# Ok::<(), forge::runtime::error::GraphError>(())
 ```
+
+## 架构模块
+
+| 模块 | 责任 |
+| --- | --- |
+| `runtime::graph` | 构建并编译状态图（`StateGraph -> CompiledGraph`） |
+| `runtime::executor` | 运行生命周期、检查点、恢复命令与流式执行 |
+| `runtime::loop` | 工具循环抽象（`LoopNode`、`LoopContext`） |
+| `runtime::tool` | 工具契约、注册、元数据、附件与状态 |
+| `runtime::permission` | 权限策略与会话决策 |
+| `runtime::event` | 运行时事件协议与序列化 |
+| `runtime::session_state` | 事件到状态的归约与运行元数据 |
+| `runtime::session` | 会话快照与持久化辅助 |
+| `runtime::provider` | 外部模型适配（当前为 OpenAI chat） |
+
+## 事件协议
+
+Forge 通过 `EventSink` / `EventRecordSink` 输出结构化事件。
+内置流输出：
+
+- `JsonLineEventSink` 与 `JsonLineEventRecordSink`
+- `SseEventSink` 与 `SseEventRecordSink`
+
+主要事件族包括：
+
+- 运行生命周期：`RunStarted`、`RunPaused`、`RunResumed`、`RunCompleted`、`RunFailed`
+- 文本与消息：`TextDelta`、`TextFinal`、`Attachment`、`Error`
+- 工具生命周期：`ToolStart`、`ToolUpdate`、`ToolResult`、`ToolError`、`ToolStatus`
+- 权限流：`PermissionAsked`、`PermissionReplied`
+- 会话控制：压缩与 phase 迁移事件
+
+## 示例
+
+可运行示例位于 `/examples`：
+
+- `cargo run --example core_workflow`
+- `cargo run --example multi_agent_graph`
+- `cargo run --example tool_context`
+
+## 项目状态
+
+Forge 目前处于 pre-1.0 的活跃开发阶段。
+
+- API 可能在不同 commit 间发生变化。
+- 发布节奏按里程碑推进，不按固定时间频率。
+- 生产使用建议固定 commit，并做兼容性回归测试。
 
 ## 开发
 
@@ -163,11 +203,17 @@ cargo test
 cargo clippy
 ```
 
+## 文档
+
+- 运行评测说明：[EVALUATION.md](EVALUATION.md)
+- 进度记录：[PROGRESS.md](PROGRESS.md)
+- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 安全策略：[SECURITY.md](SECURITY.md)
+
 ## 贡献
 
-请阅读 `CONTRIBUTING.md`，并遵守 `CODE_OF_CONDUCT.md`。安全问题请见
-`SECURITY.md`。
+欢迎贡献。提交前请阅读 `CONTRIBUTING.md` 并遵守 `CODE_OF_CONDUCT.md`。
 
 ## 许可证
 
-MIT，详见 `LICENSE`。
+MIT，详见 [LICENSE](LICENSE)。
