@@ -1,6 +1,7 @@
 //! Error types for Forge
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
 
 // ============ Interrupt Types ============
@@ -57,6 +58,9 @@ pub struct ResumeCommand {
     pub value: serde_json::Value,
     /// 要恢复的中断 ID（可选，如果只有一个中断可以省略）
     pub interrupt_id: Option<String>,
+    /// 多中断恢复映射（interrupt_id -> value）
+    #[serde(default)]
+    pub interrupt_values: HashMap<String, serde_json::Value>,
 }
 
 impl ResumeCommand {
@@ -64,6 +68,7 @@ impl ResumeCommand {
         Self {
             value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
             interrupt_id: None,
+            interrupt_values: HashMap::new(),
         }
     }
 
@@ -71,6 +76,15 @@ impl ResumeCommand {
         Self {
             value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
             interrupt_id: Some(interrupt_id.into()),
+            interrupt_values: HashMap::new(),
+        }
+    }
+
+    pub fn with_map(values: HashMap<String, serde_json::Value>) -> Self {
+        Self {
+            value: serde_json::Value::Null,
+            interrupt_id: None,
+            interrupt_values: values,
         }
     }
 }

@@ -1067,15 +1067,73 @@ impl<S: GraphState> CompiledGraph<S> {
             run_id: checkpoint.run_id.clone(),
             message: "resume command is required for pending interrupts".to_string(),
         })?;
-        let resume_value = command.value.clone();
+
+        let pending = &checkpoint.pending_interrupts;
+        if pending.len() > 1 {
+            if command.interrupt_values.is_empty() {
+                return Err(GraphError::CheckpointError {
+                    run_id: checkpoint.run_id.clone(),
+                    message:
+                        "multiple pending interrupts require ResumeCommand::with_map(interrupt_id -> value)"
+                            .to_string(),
+                });
+            }
+            let mut values_by_node: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+            for interrupt in pending {
+                let Some(value) = command.interrupt_values.get(&interrupt.id) else {
+                    return Err(GraphError::CheckpointError {
+                        run_id: checkpoint.run_id.clone(),
+                        message: format!(
+                            "missing resume value for interrupt_id '{}'",
+                            interrupt.id
+                        ),
+                    });
+                };
+                let cloned = value.clone();
+                resume_values.insert(interrupt.id.clone(), cloned.clone());
+                values_by_node
+                    .entry(interrupt.node.clone())
+                    .or_default()
+                    .push(cloned);
+            }
+            for (node, values) in values_by_node {
+                if values.len() == 1 {
+                    resume_values.insert(node, values[0].clone());
+                } else {
+                    resume_values.insert(node, serde_json::Value::Array(values));
+                }
+            }
+            return Ok(resume_values);
+        }
+
+        let interrupt = pending.first().expect("pending must not be empty");
+        let resume_value = if !command.interrupt_values.is_empty() {
+            command
+                .interrupt_values
+                .get(&interrupt.id)
+                .cloned()
+                .ok_or_else(|| GraphError::CheckpointError {
+                    run_id: checkpoint.run_id.clone(),
+                    message: format!("missing resume value for interrupt_id '{}'", interrupt.id),
+                })?
+        } else {
+            command.value.clone()
+        };
 
         if let Some(interrupt_id) = command.interrupt_id {
+            if interrupt_id != interrupt.id {
+                return Err(GraphError::CheckpointError {
+                    run_id: checkpoint.run_id.clone(),
+                    message: format!(
+                        "interrupt_id '{}' does not match pending interrupt '{}'",
+                        interrupt_id, interrupt.id
+                    ),
+                });
+            }
             resume_values.insert(interrupt_id, resume_value.clone());
         }
-        if let Some(interrupt) = checkpoint.pending_interrupts.first() {
-            resume_values.insert(interrupt.id.clone(), resume_value.clone());
-            resume_values.insert(interrupt.node.clone(), resume_value);
-        }
+        resume_values.insert(interrupt.id.clone(), resume_value.clone());
+        resume_values.insert(interrupt.node.clone(), resume_value);
 
         Ok(resume_values)
     }

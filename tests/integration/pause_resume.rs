@@ -2,7 +2,7 @@ use std::any::Any;
 use std::sync::{Arc, Mutex};
 
 use forge::runtime::constants::{END, START};
-use forge::runtime::error::{interrupt, GraphError, ResumeCommand};
+use forge::runtime::error::{interrupt, interrupt_all, GraphError, Interrupt, ResumeCommand};
 use forge::runtime::event::{Event, EventSink};
 use forge::runtime::executor::{CheckpointDurability, ExecutionConfig, ExecutionResult};
 use forge::runtime::graph::StateGraph;
@@ -125,6 +125,47 @@ async fn validate_resume_node(state: MultiPauseState) -> Result<MultiPauseState,
 async fn finish_multi_node(mut state: MultiPauseState) -> Result<MultiPauseState, GraphError> {
     state.steps += 1;
     Ok(state)
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct MultiInterruptState {
+    answers: Vec<String>,
+    resume_values: Option<serde_json::Value>,
+}
+
+impl GraphState for MultiInterruptState {
+    fn get(&self, key: &str) -> Option<&dyn Any> {
+        if key == "resume:multi" {
+            return self.resume_values.as_ref().map(|value| value as &dyn Any);
+        }
+        None
+    }
+
+    fn set(&mut self, key: &str, value: Box<dyn Any + Send + Sync>) {
+        if key == "resume:multi" {
+            if let Ok(value) = value.downcast::<serde_json::Value>() {
+                self.resume_values = Some(*value);
+            }
+        }
+    }
+}
+
+async fn multi_interrupt_node(
+    mut state: MultiInterruptState,
+) -> Result<MultiInterruptState, GraphError> {
+    match state.resume_values.clone() {
+        Some(serde_json::Value::Array(values)) if values.len() == 2 => {
+            state.answers = values
+                .into_iter()
+                .map(|value| value.as_str().unwrap_or_default().to_string())
+                .collect();
+            Ok(state)
+        }
+        _ => interrupt_all(vec![
+            Interrupt::with_id("approve first", "multi", "interrupt-1"),
+            Interrupt::with_id("approve second", "multi", "interrupt-2"),
+        ]),
+    }
 }
 
 #[test]
@@ -335,4 +376,53 @@ fn pause_resume_can_continue_from_persisted_checkpoint_after_restart() {
         _ => panic!("expected completion"),
     };
     assert_eq!(final_state.steps, 1);
+}
+
+#[test]
+fn pause_resume_requires_interrupt_map_for_multiple_pending_interrupts() {
+    let mut graph = StateGraph::<MultiInterruptState>::new();
+    graph.add_node("multi", multi_interrupt_node);
+    graph.add_edge(START, "multi");
+    graph.add_edge("multi", END);
+
+    let compiled = graph.compile().expect("compile");
+    let first = block_on(compiled.invoke_resumable(MultiInterruptState::default())).expect("run");
+    let checkpoint = match first {
+        ExecutionResult::Interrupted {
+            checkpoint,
+            interrupts,
+        } => {
+            assert_eq!(interrupts.len(), 2);
+            checkpoint
+        }
+        _ => panic!("expected interrupt"),
+    };
+
+    let invalid = block_on(compiled.resume(checkpoint.clone(), ResumeCommand::new("single-value")));
+    assert!(matches!(
+        invalid,
+        Err(GraphError::CheckpointError { message, .. })
+            if message.contains("multiple pending interrupts")
+    ));
+
+    let mut values = std::collections::HashMap::new();
+    values.insert(
+        "interrupt-1".to_string(),
+        serde_json::json!("approved-first"),
+    );
+    values.insert(
+        "interrupt-2".to_string(),
+        serde_json::json!("approved-second"),
+    );
+    let resumed = block_on(compiled.resume(checkpoint, ResumeCommand::with_map(values)))
+        .expect("resume with map");
+
+    let state = match resumed {
+        ExecutionResult::Complete(state) => state,
+        _ => panic!("expected completion"),
+    };
+    assert_eq!(
+        state.answers,
+        vec!["approved-first".to_string(), "approved-second".to_string()]
+    );
 }
