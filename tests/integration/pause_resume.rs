@@ -405,6 +405,19 @@ fn pause_resume_requires_interrupt_map_for_multiple_pending_interrupts() {
             if message.contains("multiple pending interrupts")
     ));
 
+    let mut partial_values = std::collections::HashMap::new();
+    partial_values.insert(
+        "interrupt-1".to_string(),
+        serde_json::json!("approved-first"),
+    );
+    let partial =
+        block_on(compiled.resume(checkpoint.clone(), ResumeCommand::with_map(partial_values)));
+    assert!(matches!(
+        partial,
+        Err(GraphError::CheckpointError { message, .. })
+            if message.contains("missing resume value for interrupt_id")
+    ));
+
     let mut values = std::collections::HashMap::new();
     values.insert(
         "interrupt-1".to_string(),
@@ -425,4 +438,73 @@ fn pause_resume_requires_interrupt_map_for_multiple_pending_interrupts() {
         state.answers,
         vec!["approved-first".to_string(), "approved-second".to_string()]
     );
+}
+
+#[test]
+fn pause_resume_rejects_mismatched_interrupt_id_for_single_pending_interrupt() {
+    let mut graph = StateGraph::<PauseState>::new();
+    graph.add_node("pause", pause_node);
+    graph.add_node("finish", finish_node);
+    graph.add_edge(START, "pause");
+    graph.add_edge("pause", "finish");
+    graph.add_edge("finish", END);
+
+    let compiled = graph.compile().expect("compile");
+    let first = block_on(compiled.invoke_resumable(PauseState::default())).expect("run");
+    let checkpoint = match first {
+        ExecutionResult::Interrupted { checkpoint, .. } => checkpoint,
+        _ => panic!("expected interrupt"),
+    };
+    let wrong_id = format!("{}-wrong", checkpoint.pending_interrupts[0].id);
+    let resumed =
+        block_on(compiled.resume(checkpoint, ResumeCommand::with_id("continue", wrong_id)));
+    assert!(matches!(
+        resumed,
+        Err(GraphError::CheckpointError { message, .. })
+            if message.contains("does not match pending interrupt")
+    ));
+}
+
+#[test]
+fn pause_resume_can_continue_from_latest_persisted_checkpoint() {
+    let build_graph = || {
+        let mut graph = StateGraph::<PauseState>::new();
+        graph.add_node("pause", pause_node);
+        graph.add_node("finish", finish_node);
+        graph.add_edge(START, "pause");
+        graph.add_edge("pause", "finish");
+        graph.add_edge("finish", END);
+        graph
+    };
+
+    let store_root =
+        std::env::temp_dir().join(format!("forge-checkpoint-latest-{}", uuid::Uuid::new_v4()));
+    let store = Arc::new(CheckpointStore::new(store_root));
+    let config = ExecutionConfig::new()
+        .with_checkpoint_store(Arc::clone(&store))
+        .with_checkpoint_durability(CheckpointDurability::Sync);
+
+    let compiled_1 = build_graph()
+        .compile()
+        .expect("compile")
+        .with_config(config.clone());
+    let first = block_on(compiled_1.invoke_resumable(PauseState::default())).expect("run");
+    let run_id = match first {
+        ExecutionResult::Interrupted { checkpoint, .. } => checkpoint.run_id,
+        _ => panic!("expected interrupt"),
+    };
+
+    let compiled_2 = build_graph()
+        .compile()
+        .expect("compile")
+        .with_config(config);
+    let resumed = block_on(
+        compiled_2.resume_latest_from_store(&run_id, Some(ResumeCommand::new("continue"))),
+    )
+    .expect("resume latest from store");
+    let final_state = match resumed {
+        ExecutionResult::Complete(state) => state,
+        _ => panic!("expected completion"),
+    };
+    assert_eq!(final_state.steps, 1);
 }
