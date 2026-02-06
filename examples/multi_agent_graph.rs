@@ -1,4 +1,4 @@
-﻿use forge::runtime::constants::{END, START};
+use forge::runtime::constants::{END, START};
 use forge::runtime::error::GraphError;
 use forge::runtime::graph::StateGraph;
 use forge::runtime::node::NodeSpec;
@@ -52,7 +52,10 @@ fn main() -> Result<(), GraphError> {
     let final_state = block_on(compiled.invoke(AgentState::default()))?;
 
     println!("Roles: {:?}", final_state.log);
-    println!("Shared: {}", serde_json::to_string_pretty(&final_state.shared).unwrap());
+    println!(
+        "Shared: {}",
+        serde_json::to_string_pretty(&final_state.shared).unwrap()
+    );
 
     Ok(())
 }

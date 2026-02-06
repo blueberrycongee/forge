@@ -1,15 +1,10 @@
-﻿use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use forge::runtime::error::GraphError;
 use forge::runtime::event::{Event, EventSink};
 use forge::runtime::permission::{PermissionPolicy, PermissionSession};
 use forge::runtime::tool::{
-    AttachmentPolicy,
-    AttachmentStore,
-    ToolAttachment,
-    ToolCall,
-    ToolContext,
-    ToolOutput,
+    AttachmentPolicy, AttachmentStore, ToolAttachment, ToolCall, ToolContext, ToolOutput,
     ToolRunner,
 };
 use futures::executor::block_on;
@@ -40,7 +35,9 @@ impl AttachmentStore for MemoryAttachmentStore {
 #[test]
 fn attachment_policy_converts_large_inline_payloads() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
     let store = Arc::new(MemoryAttachmentStore::default());
 
@@ -60,9 +57,11 @@ fn attachment_policy_converts_large_inline_payloads() {
         serde_json::json!("this-is-large"),
     ));
 
-    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
-        Ok(output)
-    }))
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move { Ok(output) },
+    ))
     .expect("run");
 
     assert_eq!(result.content, serde_json::Value::String("ok".to_string()));
@@ -77,7 +76,9 @@ fn attachment_policy_converts_large_inline_payloads() {
 #[test]
 fn attachment_policy_rejects_empty_mime_type() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
 
     let call = ToolCall::new("emit", "call-2", serde_json::json!({}));
@@ -95,11 +96,15 @@ fn attachment_policy_rejects_empty_mime_type() {
         serde_json::json!("payload"),
     ));
 
-    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
-        Ok(output)
-    }));
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move { Ok(output) },
+    ));
 
     assert!(result.is_err());
     let captured = events.lock().unwrap();
-    assert!(captured.iter().any(|event| matches!(event, Event::ToolError { .. })));
+    assert!(captured
+        .iter()
+        .any(|event| matches!(event, Event::ToolError { .. })));
 }

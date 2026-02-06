@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use forge::runtime::constants::{END, START};
@@ -35,9 +35,10 @@ impl EventSink for CaptureSink {
 fn aborting_tool_run_marks_aborted() {
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
     let mut registry = ToolRegistry::new();
-    registry.register("abort", Arc::new(|_call, ctx| {
-        Box::pin(async move { ctx.abort("stop") })
-    }));
+    registry.register(
+        "abort",
+        Arc::new(|_call, ctx| Box::pin(async move { ctx.abort("stop") })),
+    );
     let registry = Arc::new(registry);
 
     let node = LoopNode::with_tools_and_gate(
@@ -76,5 +77,7 @@ fn aborting_tool_run_marks_aborted() {
     }
 
     let events = capture.events.lock().unwrap();
-    assert!(events.iter().any(|event| matches!(event, Event::RunAborted { .. })));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, Event::RunAborted { .. })));
 }

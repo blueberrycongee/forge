@@ -1,11 +1,13 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 
 use forge::runtime::constants::{END, START};
 use forge::runtime::error::ResumeCommand;
 use forge::runtime::event::PermissionReply;
 use forge::runtime::executor::ExecutionResult;
 use forge::runtime::graph::StateGraph;
-use forge::runtime::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
+use forge::runtime::permission::{
+    PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession,
+};
 use forge::runtime::prelude::LoopNode;
 use forge::runtime::state::GraphState;
 use forge::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
@@ -25,12 +27,15 @@ fn tool_context_permission_interrupts_and_resumes() {
     ])));
 
     let mut registry = ToolRegistry::new();
-    registry.register("danger", Arc::new(|_call, ctx| {
-        Box::pin(async move {
-            ctx.ask_permission("perm:danger")?;
-            Ok(ToolOutput::text("ok"))
-        })
-    }));
+    registry.register(
+        "danger",
+        Arc::new(|_call, ctx| {
+            Box::pin(async move {
+                ctx.ask_permission("perm:danger")?;
+                Ok(ToolOutput::text("ok"))
+            })
+        }),
+    );
     let registry = Arc::new(registry);
 
     let node = LoopNode::with_tools_and_gate(
@@ -62,8 +67,8 @@ fn tool_context_permission_interrupts_and_resumes() {
 
     gate.apply_reply("perm:danger", PermissionReply::Once);
 
-    let resumed = block_on(compiled.resume(checkpoint, ResumeCommand::new("allow")))
-        .expect("resume");
+    let resumed =
+        block_on(compiled.resume(checkpoint, ResumeCommand::new("allow"))).expect("resume");
     match resumed {
         ExecutionResult::Complete(state) => assert!(state.completed),
         _ => panic!("expected completion"),
@@ -77,12 +82,15 @@ fn tool_context_permission_without_reply_stays_interrupted() {
     ])));
 
     let mut registry = ToolRegistry::new();
-    registry.register("danger", Arc::new(|_call, ctx| {
-        Box::pin(async move {
-            ctx.ask_permission("perm:danger")?;
-            Ok(ToolOutput::text("ok"))
-        })
-    }));
+    registry.register(
+        "danger",
+        Arc::new(|_call, ctx| {
+            Box::pin(async move {
+                ctx.ask_permission("perm:danger")?;
+                Ok(ToolOutput::text("ok"))
+            })
+        }),
+    );
     let registry = Arc::new(registry);
 
     let node = LoopNode::with_tools_and_gate(

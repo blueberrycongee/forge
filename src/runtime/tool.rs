@@ -1,10 +1,10 @@
-﻿//! Tool lifecycle types for streaming execution.
+//! Tool lifecycle types for streaming execution.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::runtime::error::{GraphError, GraphResult, Interrupt};
 use crate::runtime::cancel::CancellationToken;
+use crate::runtime::error::{GraphError, GraphResult, Interrupt};
 use crate::runtime::event::{Event, EventSink, ToolUpdate};
 use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,11 @@ pub struct ToolCall {
 }
 
 impl ToolCall {
-    pub fn new(tool: impl Into<String>, call_id: impl Into<String>, input: serde_json::Value) -> Self {
+    pub fn new(
+        tool: impl Into<String>,
+        call_id: impl Into<String>,
+        input: serde_json::Value,
+    ) -> Self {
         Self {
             tool: tool.into(),
             call_id: call_id.into(),
@@ -504,10 +508,12 @@ fn normalize_attachment(
                 attachment.size = Some(size);
                 return Ok(attachment);
             }
-            let store = context.attachment_store().ok_or_else(|| GraphError::ExecutionError {
-                node: format!("tool:{}", tool),
-                message: "attachment store unavailable".to_string(),
-            })?;
+            let store = context
+                .attachment_store()
+                .ok_or_else(|| GraphError::ExecutionError {
+                    node: format!("tool:{}", tool),
+                    message: "attachment store unavailable".to_string(),
+                })?;
             let reference = store.store(&attachment)?;
             Ok(ToolAttachment::reference(
                 attachment.name,
@@ -521,12 +527,14 @@ fn normalize_attachment(
 }
 
 /// Tool handler signature for registry execution.
-pub type ToolHandler =
-    Arc<
-        dyn Fn(ToolCall, ToolContext) -> crate::runtime::node::BoxFuture<'static, GraphResult<ToolOutput>>
-            + Send
-            + Sync,
-    >;
+pub type ToolHandler = Arc<
+    dyn Fn(
+            ToolCall,
+            ToolContext,
+        ) -> crate::runtime::node::BoxFuture<'static, GraphResult<ToolOutput>>
+        + Send
+        + Sync,
+>;
 
 /// Minimal tool registry for dispatching by name.
 #[derive(Default)]
@@ -547,11 +555,7 @@ impl ToolRegistry {
         self.tools.insert(name.into(), handler);
     }
 
-    pub fn register_with_definition(
-        &mut self,
-        definition: ToolDefinition,
-        handler: ToolHandler,
-    ) {
+    pub fn register_with_definition(&mut self, definition: ToolDefinition, handler: ToolHandler) {
         let name = definition.name.clone();
         self.tools.insert(name.clone(), handler);
         self.definitions.insert(name, definition);
@@ -574,12 +578,14 @@ impl ToolRegistry {
         call: ToolCall,
         context: ToolContext,
     ) -> GraphResult<ToolOutput> {
-        let handler = self.tools.get(&call.tool).cloned().ok_or_else(|| {
-            GraphError::ExecutionError {
-                node: format!("tool:{}", call.tool),
-                message: "tool not found".to_string(),
-            }
-        })?;
+        let handler =
+            self.tools
+                .get(&call.tool)
+                .cloned()
+                .ok_or_else(|| GraphError::ExecutionError {
+                    node: format!("tool:{}", call.tool),
+                    message: "tool not found".to_string(),
+                })?;
 
         ToolRunner::run_with_events(call, context, move |call, ctx| handler(call, ctx)).await
     }
@@ -644,15 +650,8 @@ impl ToolSchemaRegistry {
 #[cfg(test)]
 mod tests {
     use super::{
-        AttachmentPolicy,
-        ToolCall,
-        ToolContext,
-        ToolMetadata,
-        ToolOutput,
-        ToolRegistry,
-        ToolRunner,
-        ToolSchemaRegistry,
-        ToolState,
+        AttachmentPolicy, ToolCall, ToolContext, ToolMetadata, ToolOutput, ToolRegistry,
+        ToolRunner, ToolSchemaRegistry, ToolState,
     };
     use crate::runtime::event::{Event, EventSink};
     use crate::runtime::permission::{PermissionPolicy, PermissionSession};
@@ -679,7 +678,9 @@ mod tests {
     #[test]
     fn tool_runner_emits_status_and_result() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
 
         let call = ToolCall::new("grep", "call-1", serde_json::json!({"q": "hi"}));
         let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
@@ -690,12 +691,17 @@ mod tests {
             call.tool.clone(),
             call.call_id.clone(),
         );
-        let result = block_on(ToolRunner::run_with_events(call, context, |call, _ctx| async move {
-            Ok(ToolOutput::text(format!("ok:{}", call.tool)))
-        }))
+        let result = block_on(ToolRunner::run_with_events(
+            call,
+            context,
+            |call, _ctx| async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) },
+        ))
         .expect("tool run");
 
-        assert_eq!(result.content, serde_json::Value::String("ok:grep".to_string()));
+        assert_eq!(
+            result.content,
+            serde_json::Value::String("ok:grep".to_string())
+        );
         let kinds: Vec<&'static str> = events
             .lock()
             .unwrap()
@@ -723,12 +729,17 @@ mod tests {
     #[test]
     fn tool_registry_dispatches_by_name() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let mut registry = ToolRegistry::new();
 
-        registry.register("echo", Arc::new(|call, _ctx| {
-            Box::pin(async move { Ok(ToolOutput::text(format!("echo:{}", call.tool))) })
-        }));
+        registry.register(
+            "echo",
+            Arc::new(|call, _ctx| {
+                Box::pin(async move { Ok(ToolOutput::text(format!("echo:{}", call.tool))) })
+            }),
+        );
 
         let call = ToolCall::new("echo", "call-2", serde_json::json!({"msg": "hi"}));
         let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
@@ -741,7 +752,10 @@ mod tests {
         );
         let result = block_on(registry.run_with_events(call, context)).expect("registry run");
 
-        assert_eq!(result.content, serde_json::Value::String("echo:echo".to_string()));
+        assert_eq!(
+            result.content,
+            serde_json::Value::String("echo:echo".to_string())
+        );
         assert!(events
             .lock()
             .unwrap()
@@ -781,7 +795,10 @@ mod tests {
         assert_eq!(metadata.mime_type.as_deref(), Some("text/plain"));
         assert_eq!(metadata.schema.as_deref(), Some("v1"));
         assert_eq!(metadata.source.as_deref(), Some("unit-test"));
-        assert_eq!(metadata.attributes.get("lang"), Some(&serde_json::json!("en")));
+        assert_eq!(
+            metadata.attributes.get("lang"),
+            Some(&serde_json::json!("en"))
+        );
     }
 
     #[test]

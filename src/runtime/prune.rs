@@ -1,4 +1,4 @@
-﻿//! Prune policy for trimming old tool events.
+//! Prune policy for trimming old tool events.
 
 use crate::runtime::event::{Event, EventRecord};
 
@@ -136,8 +136,12 @@ mod tests {
         let result = prune_tool_events(&mut events, &PrunePolicy::new(2));
         assert_eq!(result.pruned, 2);
         assert_eq!(events.len(), 4);
-        assert!(events.iter().any(|record| matches!(record.event, Event::TextDelta { .. })));
-        assert!(events.iter().any(|record| matches!(record.event, Event::StepFinish { .. })));
+        assert!(events
+            .iter()
+            .any(|record| matches!(record.event, Event::TextDelta { .. })));
+        assert!(events
+            .iter()
+            .any(|record| matches!(record.event, Event::StepFinish { .. })));
     }
 
     #[test]

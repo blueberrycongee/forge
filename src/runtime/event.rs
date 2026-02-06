@@ -1,4 +1,4 @@
-﻿//! Event protocol for streaming execution.
+//! Event protocol for streaming execution.
 //!
 //! This is the foundation for tool-driven runtime events
 //! (text/tool/step/permission) so clients can consume a single stream.
@@ -44,9 +44,7 @@ pub enum ToolUpdate {
         truncated: bool,
     },
     /// Tool metadata update (full payload).
-    Metadata {
-        metadata: ToolMetadata,
-    },
+    Metadata { metadata: ToolMetadata },
     /// Progress updates for long-running tools.
     Progress {
         current: u64,
@@ -55,9 +53,7 @@ pub enum ToolUpdate {
         message: Option<String>,
     },
     /// Custom tool update payloads.
-    Custom {
-        data: serde_json::Value,
-    },
+    Custom { data: serde_json::Value },
 }
 
 /// Event metadata for protocol-level fields.
@@ -273,12 +269,7 @@ pub enum Event {
 #[cfg(test)]
 mod tests {
     use super::{
-        max_record_seq,
-        sort_records_by_meta,
-        Event,
-        EventMeta,
-        EventRecord,
-        EventSequencer,
+        max_record_seq, sort_records_by_meta, Event, EventMeta, EventRecord, EventSequencer,
         TokenUsage,
     };
     use crate::runtime::tool::ToolState;
@@ -441,7 +432,10 @@ mod tests {
 
         sort_records_by_meta(&mut records);
 
-        let ids: Vec<&str> = records.iter().map(|record| record.meta.event_id.as_str()).collect();
+        let ids: Vec<&str> = records
+            .iter()
+            .map(|record| record.meta.event_id.as_str())
+            .collect();
         assert_eq!(ids, vec!["c", "a", "b"]);
     }
 

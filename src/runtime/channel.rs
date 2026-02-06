@@ -1,5 +1,5 @@
-﻿//! Channels for state management
-//! 
+//! Channels for state management
+//!
 //! Channels provide different strategies for aggregating state updates.
 //! This is an advanced feature for complex state management scenarios.
 
@@ -9,13 +9,13 @@ use std::any::Any;
 pub trait Channel: Send + Sync {
     /// Get the channel name
     fn name(&self) -> &str;
-    
+
     /// Update the channel value
     fn update(&mut self, value: Box<dyn Any + Send + Sync>);
-    
+
     /// Get the current value
     fn get(&self) -> Option<&dyn Any>;
-    
+
     /// Reset the channel
     fn reset(&mut self);
 }
@@ -33,7 +33,7 @@ impl<T: Send + Sync + 'static> LastValue<T> {
             value: None,
         }
     }
-    
+
     pub fn with_default(name: impl Into<String>, default: T) -> Self {
         Self {
             name: name.into(),
@@ -46,17 +46,17 @@ impl<T: Send + Sync + 'static> Channel for LastValue<T> {
     fn name(&self) -> &str {
         &self.name
     }
-    
+
     fn update(&mut self, value: Box<dyn Any + Send + Sync>) {
         if let Ok(v) = value.downcast::<T>() {
             self.value = Some(*v);
         }
     }
-    
+
     fn get(&self) -> Option<&dyn Any> {
         self.value.as_ref().map(|v| v as &dyn Any)
     }
-    
+
     fn reset(&mut self) {
         self.value = None;
     }
@@ -81,7 +81,7 @@ impl<T: Send + Sync + Clone + 'static> Channel for AppendChannel<T> {
     fn name(&self) -> &str {
         &self.name
     }
-    
+
     fn update(&mut self, value: Box<dyn Any + Send + Sync>) {
         // Try to downcast to single value first
         let any_ref: &dyn Any = &*value;
@@ -91,11 +91,11 @@ impl<T: Send + Sync + Clone + 'static> Channel for AppendChannel<T> {
             self.values.extend(vs.iter().cloned());
         }
     }
-    
+
     fn get(&self) -> Option<&dyn Any> {
         Some(&self.values as &dyn Any)
     }
-    
+
     fn reset(&mut self) {
         self.values.clear();
     }
@@ -120,7 +120,7 @@ where
             reducer,
         }
     }
-    
+
     pub fn with_default(name: impl Into<String>, default: T, reducer: F) -> Self {
         Self {
             name: name.into(),
@@ -138,7 +138,7 @@ where
     fn name(&self) -> &str {
         &self.name
     }
-    
+
     fn update(&mut self, value: Box<dyn Any + Send + Sync>) {
         if let Ok(v) = value.downcast::<T>() {
             self.value = Some(match self.value.take() {
@@ -147,11 +147,11 @@ where
             });
         }
     }
-    
+
     fn get(&self) -> Option<&dyn Any> {
         self.value.as_ref().map(|v| v as &dyn Any)
     }
-    
+
     fn reset(&mut self) {
         self.value = None;
     }
@@ -163,27 +163,27 @@ pub mod reducers {
     pub fn add<T: std::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b
     }
-    
+
     /// Multiply numbers
     pub fn multiply<T: std::ops::Mul<Output = T>>(a: T, b: T) -> T {
         a * b
     }
-    
+
     /// Concatenate strings
     pub fn concat(a: String, b: String) -> String {
         format!("{}{}", a, b)
     }
-    
+
     /// Take maximum
     pub fn max<T: Ord>(a: T, b: T) -> T {
         std::cmp::max(a, b)
     }
-    
+
     /// Take minimum
     pub fn min<T: Ord>(a: T, b: T) -> T {
         std::cmp::min(a, b)
     }
-    
+
     /// Merge vectors
     pub fn merge_vec<T: Clone>(mut a: Vec<T>, b: Vec<T>) -> Vec<T> {
         a.extend(b);

@@ -1,18 +1,14 @@
-﻿use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use crate::runtime::cancel::CancellationToken;
-use crate::runtime::event::{Event, EventSink};
 use crate::runtime::error::{GraphResult, ResumeCommand};
+use crate::runtime::event::{Event, EventSink};
 use crate::runtime::message::MessageRole;
-use crate::runtime::permission::{
-    PermissionGate,
-    PermissionPolicy,
-    PermissionSession,
-};
 use crate::runtime::node::NodeSpec;
+use crate::runtime::permission::{PermissionGate, PermissionPolicy, PermissionSession};
+use crate::runtime::session::FileAttachmentStore;
 use crate::runtime::session_state::SessionState;
 use crate::runtime::state::GraphState;
-use crate::runtime::session::FileAttachmentStore;
 use crate::runtime::tool::{AttachmentPolicy, AttachmentStore, ToolCall, ToolOutput, ToolRegistry};
 
 /// LoopContext bundles tool registry + event sink for loop handlers.
@@ -148,11 +144,7 @@ impl<S: GraphState> LoopNode<S> {
         self
     }
 
-    pub fn with_tools<F, Fut>(
-        name: impl Into<String>,
-        tools: Arc<ToolRegistry>,
-        handler: F,
-    ) -> Self
+    pub fn with_tools<F, Fut>(name: impl Into<String>, tools: Arc<ToolRegistry>, handler: F) -> Self
     where
         F: Fn(S, LoopContext) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = GraphResult<S>> + Send + 'static,
@@ -243,10 +235,8 @@ impl<S: GraphState> LoopNode<S> {
         sink: Arc<dyn EventSink>,
         role: MessageRole,
     ) -> crate::runtime::node::BoxFuture<'static, GraphResult<S>> {
-        let sink: Arc<dyn EventSink> = Arc::new(SessionStateSink::new(
-            sink,
-            Arc::clone(&session_state),
-        ));
+        let sink: Arc<dyn EventSink> =
+            Arc::new(SessionStateSink::new(sink, Arc::clone(&session_state)));
         let fut = self.run(state, sink);
         Box::pin(async move {
             let result = fut.await?;
@@ -312,14 +302,16 @@ impl EventSink for SessionStateSink {
 mod tests {
     use super::*;
     use crate::runtime::error::GraphError;
-    use crate::runtime::permission::PermissionRequest;
     use crate::runtime::event::{Event, EventSink};
-    use crate::runtime::permission::{PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession};
+    use crate::runtime::permission::PermissionRequest;
+    use crate::runtime::permission::{
+        PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession,
+    };
     use crate::runtime::session_state::{SessionState, ToolCallStatus};
     use crate::runtime::state::GraphState;
     use crate::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
-    use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default, Debug)]
     struct LoopState {
@@ -342,7 +334,9 @@ mod tests {
     #[test]
     fn loop_node_emits_events() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
 
         let node = LoopNode::new("loop", |mut state: LoopState, ctx| async move {
             ctx.emit(Event::TextDelta {
@@ -362,21 +356,34 @@ mod tests {
     #[test]
     fn loop_node_runs_tools_via_registry() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call, _ctx| {
-            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
-        }));
+        registry.register(
+            "echo",
+            Arc::new(|call, _ctx| {
+                Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
+            }),
+        );
         let registry = Arc::new(registry);
 
-        let node = LoopNode::with_tools("loop", Arc::clone(&registry), |mut state: LoopState, ctx| async move {
-            let output = ctx
-                .run_tool(ToolCall::new("echo", "call-1", serde_json::json!({"msg": "hi"})))
-                .await?;
-            let text = output.content.as_str().unwrap_or_default().to_string();
-            state.log.push(text);
-            Ok(state)
-        });
+        let node = LoopNode::with_tools(
+            "loop",
+            Arc::clone(&registry),
+            |mut state: LoopState, ctx| async move {
+                let output = ctx
+                    .run_tool(ToolCall::new(
+                        "echo",
+                        "call-1",
+                        serde_json::json!({"msg": "hi"}),
+                    ))
+                    .await?;
+                let text = output.content.as_str().unwrap_or_default().to_string();
+                state.log.push(text);
+                Ok(state)
+            },
+        );
 
         let result = block_on(node.run(LoopState::default(), sink)).expect("run");
         assert_eq!(result.log, vec!["ok:echo".to_string()]);
@@ -390,16 +397,20 @@ mod tests {
     #[test]
     fn loop_context_asks_permission_for_tool() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call, _ctx| {
-            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
-        }));
+        registry.register(
+            "echo",
+            Arc::new(|call, _ctx| {
+                Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
+            }),
+        );
         let registry = Arc::new(registry);
-        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![PermissionRule::new(
-            PermissionDecision::Ask,
-            vec!["tool:echo".to_string()],
-        )])));
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![
+            PermissionRule::new(PermissionDecision::Ask, vec!["tool:echo".to_string()]),
+        ])));
 
         let node = LoopNode::with_tools_and_gate(
             "loop",
@@ -424,23 +435,31 @@ mod tests {
             other => panic!("expected interrupted, got {:?}", other),
         }
         let captured = events.lock().unwrap();
-        assert!(captured.iter().any(|event| matches!(event, Event::PermissionAsked { .. })));
-        assert!(!captured.iter().any(|event| matches!(event, Event::ToolStart { .. })));
+        assert!(captured
+            .iter()
+            .any(|event| matches!(event, Event::PermissionAsked { .. })));
+        assert!(!captured
+            .iter()
+            .any(|event| matches!(event, Event::ToolStart { .. })));
     }
 
     #[test]
     fn loop_context_allows_after_permission_reply() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call, _ctx| {
-            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
-        }));
+        registry.register(
+            "echo",
+            Arc::new(|call, _ctx| {
+                Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
+            }),
+        );
         let registry = Arc::new(registry);
-        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![PermissionRule::new(
-            PermissionDecision::Ask,
-            vec!["tool:echo".to_string()],
-        )])));
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![
+            PermissionRule::new(PermissionDecision::Ask, vec!["tool:echo".to_string()]),
+        ])));
 
         let node = LoopNode::with_tools_and_gate(
             "loop",
@@ -468,16 +487,20 @@ mod tests {
     #[test]
     fn loop_context_resumes_permission_from_command() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let mut registry = ToolRegistry::new();
-        registry.register("echo", Arc::new(|call, _ctx| {
-            Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
-        }));
+        registry.register(
+            "echo",
+            Arc::new(|call, _ctx| {
+                Box::pin(async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) })
+            }),
+        );
         let registry = Arc::new(registry);
-        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![PermissionRule::new(
-            PermissionDecision::Ask,
-            vec!["tool:echo".to_string()],
-        )])));
+        let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![
+            PermissionRule::new(PermissionDecision::Ask, vec!["tool:echo".to_string()]),
+        ])));
         let resume = ResumeCommand::new("once");
 
         let node = LoopNode::with_tools_and_gate(
@@ -506,7 +529,9 @@ mod tests {
     #[test]
     fn loop_node_updates_session_state_from_events() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
 
         let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
@@ -538,13 +563,18 @@ mod tests {
         let session_state = session_state.lock().unwrap();
         assert_eq!(session_state.pending_parts.len(), 3);
         assert_eq!(session_state.tool_calls.len(), 1);
-        assert_eq!(session_state.tool_calls[0].status, ToolCallStatus::Completed);
+        assert_eq!(
+            session_state.tool_calls[0].status,
+            ToolCallStatus::Completed
+        );
     }
 
     #[test]
     fn loop_node_emits_phase_change_events() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
         session_state.lock().unwrap().mark_model_thinking();
 
@@ -576,7 +606,9 @@ mod tests {
     #[test]
     fn loop_node_emits_phase_rejection_events() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
 
         let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
@@ -607,7 +639,9 @@ mod tests {
     #[test]
     fn loop_node_finalizes_session_state_message_after_run() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
 
         let node = LoopNode::new("loop", |state: LoopState, ctx| async move {
@@ -642,7 +676,9 @@ mod tests {
     #[test]
     fn loop_node_finalize_noop_when_no_pending_parts() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+        let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+            events: events.clone(),
+        });
         let session_state = Arc::new(Mutex::new(SessionState::new("s1", "m1")));
 
         let node = LoopNode::new("loop", |state: LoopState, _ctx| async move { Ok(state) });
@@ -659,11 +695,3 @@ mod tests {
         assert!(session_state.messages.is_empty());
     }
 }
-
-
-
-
-
-
-
-

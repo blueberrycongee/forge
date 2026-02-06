@@ -1,4 +1,4 @@
-﻿//! Forge Runtime
+//! Forge Runtime
 //!
 //! A Rust runtime for building stateful, event-driven agent applications\.
 //!
@@ -66,138 +66,84 @@
 //! ```
 
 // Core modules
+pub mod branch;
+pub mod cancel;
+pub mod channel;
+pub mod compaction;
+pub mod component;
 pub mod constants;
 pub mod error;
-pub mod cancel;
-pub mod state;
-pub mod node;
-pub mod branch;
-pub mod graph;
-pub mod executor;
-pub mod channel;
 pub mod event;
+pub mod executor;
+pub mod graph;
+pub mod r#loop;
 pub mod message;
-pub mod component;
-pub mod compaction;
-pub mod permission;
-pub mod prune;
-pub mod tool;
-pub mod trace;
+pub mod node;
 pub mod output;
+pub mod permission;
 pub mod platform;
 pub mod provider;
+pub mod prune;
 pub mod session;
 pub mod session_state;
-pub mod r#loop;
+pub mod state;
+pub mod tool;
 pub mod toolkit;
+pub mod trace;
 
 // Evaluation modules
-pub mod metrics;
-pub mod evaluator;
 pub mod ablation;
+pub mod evaluator;
+pub mod metrics;
 
 /// Prelude - commonly used types
 pub mod prelude {
     // Core types
+    pub use crate::runtime::cancel::CancellationToken;
     pub use crate::runtime::constants::END;
     pub use crate::runtime::error::GraphError;
-    pub use crate::runtime::cancel::CancellationToken;
-    
-    
-    
-    pub use crate::runtime::graph::StateGraph;
-    pub use crate::runtime::executor::CompiledGraph;
-pub use crate::runtime::event::{
-    Event,
-    EventMeta,
-    EventRecord,
-    EventRecordSink,
-    EventSequencer,
-    EventSink,
-    NoopEventRecordSink,
-    NoopEventSink,
-    PermissionReply,
-    ToolUpdate,
-    TokenUsage,
-};
-    pub use crate::runtime::message::{Message, MessageRole, Part};
-    pub use crate::runtime::component::{
-        register_retriever_tool,
-        ChatModel,
-        ChatRequest,
-        ChatResponse,
-        EmbeddingModel,
-        HashEmbeddingModel,
-        InMemoryRetriever,
-        MockChatModel,
-        RetrievedDocument,
-        Retriever,
-    };
+
+    pub use crate::runtime::builtin_tool_registry;
     pub use crate::runtime::compaction::{CompactionPolicy, CompactionResult};
-    pub use crate::runtime::prune::{PrunePolicy, PruneResult};
-    pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
+    pub use crate::runtime::component::{
+        register_retriever_tool, ChatModel, ChatRequest, ChatResponse, EmbeddingModel,
+        HashEmbeddingModel, InMemoryRetriever, MockChatModel, RetrievedDocument, Retriever,
+    };
+    pub use crate::runtime::event::{
+        Event, EventMeta, EventRecord, EventRecordSink, EventSequencer, EventSink,
+        NoopEventRecordSink, NoopEventSink, PermissionReply, TokenUsage, ToolUpdate,
+    };
+    pub use crate::runtime::executor::CompiledGraph;
+    pub use crate::runtime::graph::StateGraph;
+    pub use crate::runtime::message::{Message, MessageRole, Part};
     pub use crate::runtime::output::{
-        JsonLineEventRecordSink,
-        JsonLineEventSink,
-        SseEventRecordSink,
-        SseEventSink,
-    };
-    pub use crate::runtime::platform::{
-        PlatformOutputFormat,
-        PlatformStreamMode,
-        stream_to_writer,
-        stream_cli_jsonl_events,
-        stream_cli_jsonl_records,
-        stream_sse_events,
-        stream_sse_records,
-    };
-    pub use crate::runtime::provider::openai::{
-        OpenAiChatModel,
-        OpenAiChatModelConfig,
-    };
-    pub use crate::runtime::session::{
-        AttachmentResolver,
-        SessionMessage,
-        SessionSnapshot,
-        SessionSnapshotIo,
-    };
-    pub use crate::runtime::session_state::{
-        RunMetadata,
-        RunStatus,
-        SessionPhase,
-        SessionRouting,
-        SessionState,
-        ToolCallRecord,
-        ToolCallStatus,
+        JsonLineEventRecordSink, JsonLineEventSink, SseEventRecordSink, SseEventSink,
     };
     pub use crate::runtime::permission::{
-        PermissionDecision,
-        PermissionGate,
-        PermissionPolicy,
-        PermissionRequest,
-        PermissionRule,
-        PermissionSession,
-        PermissionSnapshot,
-        PermissionStore,
-        InMemoryPermissionStore,
+        InMemoryPermissionStore, PermissionDecision, PermissionGate, PermissionPolicy,
+        PermissionRequest, PermissionRule, PermissionSession, PermissionSnapshot, PermissionStore,
+    };
+    pub use crate::runtime::platform::{
+        stream_cli_jsonl_events, stream_cli_jsonl_records, stream_sse_events, stream_sse_records,
+        stream_to_writer, PlatformOutputFormat, PlatformStreamMode,
+    };
+    pub use crate::runtime::provider::openai::{OpenAiChatModel, OpenAiChatModelConfig};
+    pub use crate::runtime::prune::{PrunePolicy, PruneResult};
+    pub use crate::runtime::r#loop::{LoopContext, LoopNode};
+    pub use crate::runtime::session::{
+        AttachmentResolver, SessionMessage, SessionSnapshot, SessionSnapshotIo,
+    };
+    pub use crate::runtime::session_state::{
+        RunMetadata, RunStatus, SessionPhase, SessionRouting, SessionState, ToolCallRecord,
+        ToolCallStatus,
     };
     pub use crate::runtime::tool::{
-        ToolCall,
-        ToolDefinition,
-        ToolMetadata,
-        ToolOutput,
-        ToolRegistry,
-        ToolRunner,
-        ToolSchemaRegistry,
-        ToolState,
+        ToolCall, ToolDefinition, ToolMetadata, ToolOutput, ToolRegistry, ToolRunner,
+        ToolSchemaRegistry, ToolState,
     };
-    pub use crate::runtime::r#loop::{LoopContext, LoopNode};
-    pub use crate::runtime::builtin_tool_registry;
+    pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
 
     // Metrics and evaluation
-    
-    
-    
 }
 
 pub fn builtin_tool_registry(root: impl Into<std::path::PathBuf>) -> tool::ToolRegistry {

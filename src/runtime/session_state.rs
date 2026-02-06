@@ -1,8 +1,8 @@
-﻿//! Session state model for runtime loop processing.
+//! Session state model for runtime loop processing.
 
 use crate::runtime::event::PermissionReply;
-use crate::runtime::tool::ToolAttachment;
 use crate::runtime::message::{Message, Part};
+use crate::runtime::tool::ToolAttachment;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum RunStatus {
@@ -107,7 +107,11 @@ pub struct ToolAttachmentRecord {
 }
 
 impl ToolAttachmentRecord {
-    pub fn new(tool: impl Into<String>, call_id: impl Into<String>, attachment: ToolAttachment) -> Self {
+    pub fn new(
+        tool: impl Into<String>,
+        call_id: impl Into<String>,
+        attachment: ToolAttachment,
+    ) -> Self {
         Self {
             tool: tool.into(),
             call_id: call_id.into(),
@@ -257,10 +261,7 @@ impl SessionState {
             self.phase = next;
             Ok(())
         } else {
-            Err(format!(
-                "invalid transition {:?} -> {:?}",
-                self.phase, next
-            ))
+            Err(format!("invalid transition {:?} -> {:?}", self.phase, next))
         }
     }
 
@@ -281,10 +282,7 @@ impl SessionState {
                 to: next,
             }))
         } else {
-            Err(format!(
-                "invalid transition {:?} -> {:?}",
-                self.phase, next
-            ))
+            Err(format!("invalid transition {:?} -> {:?}", self.phase, next))
         }
     }
 
@@ -293,7 +291,11 @@ impl SessionState {
     }
 
     pub fn update_tool_call(&mut self, call_id: &str, status: ToolCallStatus) -> bool {
-        if let Some(entry) = self.tool_calls.iter_mut().find(|entry| entry.call_id == call_id) {
+        if let Some(entry) = self
+            .tool_calls
+            .iter_mut()
+            .find(|entry| entry.call_id == call_id)
+        {
             entry.status = status;
             true
         } else {
@@ -310,7 +312,10 @@ impl SessionState {
             .push(PermissionDecisionRecord::new(permission, reply));
     }
 
-    pub fn finalize_message(&mut self, role: crate::runtime::message::MessageRole) -> Option<Message> {
+    pub fn finalize_message(
+        &mut self,
+        role: crate::runtime::message::MessageRole,
+    ) -> Option<Message> {
         if self.pending_parts.is_empty() {
             return None;
         }
@@ -331,8 +336,10 @@ impl SessionState {
     ) -> (bool, Vec<crate::runtime::event::Event>) {
         use crate::runtime::event::Event;
         let mut events = Vec::new();
-        let push_transition = |state: &mut Self, next: SessionPhase, events: &mut Vec<Event>| {
-            match state.try_transition_with_event(next.clone()) {
+        let push_transition =
+            |state: &mut Self, next: SessionPhase, events: &mut Vec<Event>| match state
+                .try_transition_with_event(next.clone())
+            {
                 Ok(Some(event)) => {
                     events.push(event);
                 }
@@ -346,8 +353,7 @@ impl SessionState {
                         reason,
                     });
                 }
-            }
-        };
+            };
         match event {
             Event::TextDelta { delta, .. } => {
                 push_transition(self, SessionPhase::AssistantStreaming, &mut events);
@@ -358,9 +364,8 @@ impl SessionState {
             }
             Event::TextFinal { text, .. } => {
                 push_transition(self, SessionPhase::AssistantStreaming, &mut events);
-                self.pending_parts.push(Part::TextFinal {
-                    text: text.clone(),
-                });
+                self.pending_parts
+                    .push(Part::TextFinal { text: text.clone() });
                 (true, events)
             }
             Event::ToolStart {
@@ -553,11 +558,15 @@ mod tests {
         let mut state = SessionState::new("s1", "m1");
 
         assert!(state.try_transition(SessionPhase::ModelThinking).is_ok());
-        assert!(state.try_transition(SessionPhase::AssistantStreaming).is_ok());
+        assert!(state
+            .try_transition(SessionPhase::AssistantStreaming)
+            .is_ok());
         assert!(state.try_transition(SessionPhase::ToolProposed).is_ok());
         assert!(state.try_transition(SessionPhase::ToolRunning).is_ok());
         assert!(state.try_transition(SessionPhase::ToolResult).is_ok());
-        assert!(state.try_transition(SessionPhase::AssistantFinalize).is_ok());
+        assert!(state
+            .try_transition(SessionPhase::AssistantFinalize)
+            .is_ok());
         assert!(state.try_transition(SessionPhase::Completed).is_ok());
     }
 
@@ -622,7 +631,9 @@ mod tests {
             text: "llo".to_string(),
         });
 
-        let message = state.finalize_message(MessageRole::Assistant).expect("message");
+        let message = state
+            .finalize_message(MessageRole::Assistant)
+            .expect("message");
 
         assert_eq!(message.role, MessageRole::Assistant);
         assert_eq!(
@@ -857,18 +868,24 @@ mod tests {
         let (handled, events) = state.apply_event_with_events(&event);
         assert!(handled);
         assert_eq!(events.len(), 2);
-        assert_eq!(events[0], Event::SessionPhaseChanged {
-            session_id: "s1".to_string(),
-            message_id: "m1".to_string(),
-            from: SessionPhase::AssistantStreaming,
-            to: SessionPhase::ToolProposed,
-        });
-        assert_eq!(events[1], Event::SessionPhaseChanged {
-            session_id: "s1".to_string(),
-            message_id: "m1".to_string(),
-            from: SessionPhase::ToolProposed,
-            to: SessionPhase::ToolRunning,
-        });
+        assert_eq!(
+            events[0],
+            Event::SessionPhaseChanged {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::AssistantStreaming,
+                to: SessionPhase::ToolProposed,
+            }
+        );
+        assert_eq!(
+            events[1],
+            Event::SessionPhaseChanged {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                from: SessionPhase::ToolProposed,
+                to: SessionPhase::ToolRunning,
+            }
+        );
         assert_eq!(state.phase, SessionPhase::ToolRunning);
     }
 

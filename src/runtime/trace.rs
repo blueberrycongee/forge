@@ -1,14 +1,21 @@
-﻿//! Trace data structures for runtime replay.
+//! Trace data structures for runtime replay.
 
-use serde::{Deserialize, Serialize};
 use crate::runtime::error::GraphResult;
+use serde::{Deserialize, Serialize};
 
 /// A trace event capturing high-level execution activity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TraceEvent {
-    NodeStart { node: String },
-    NodeFinish { node: String },
-    Compacted { summary: String, truncated_before: usize },
+    NodeStart {
+        node: String,
+    },
+    NodeFinish {
+        node: String,
+    },
+    Compacted {
+        summary: String,
+        truncated_before: usize,
+    },
 }
 
 /// Span covering a node execution window.
@@ -175,9 +182,8 @@ impl TraceReplay {
         match value {
             serde_json::Value::Array(_) => {
                 let mut records: Vec<crate::runtime::event::EventRecord> =
-                    serde_json::from_value(value).map_err(|err| {
-                        std::io::Error::new(std::io::ErrorKind::InvalidData, err)
-                    })?;
+                    serde_json::from_value(value)
+                        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
                 crate::runtime::event::sort_records_by_meta(&mut records);
                 Ok(records)
             }
@@ -204,9 +210,8 @@ impl TraceReplay {
                     )
                 })?;
                 let mut records: Vec<crate::runtime::event::EventRecord> =
-                    serde_json::from_value(records_value).map_err(|err| {
-                        std::io::Error::new(std::io::ErrorKind::InvalidData, err)
-                    })?;
+                    serde_json::from_value(records_value)
+                        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
                 crate::runtime::event::sort_records_by_meta(&mut records);
                 Ok(records)
             }
@@ -328,8 +333,12 @@ mod tests {
         TraceReplay::replay_to_sink(&trace, &sink).expect("replay");
 
         let events = events.lock().unwrap();
-        assert!(events.iter().any(|event| matches!(event, Event::StepStart { .. })));
-        assert!(events.iter().any(|event| matches!(event, Event::SessionCompacted { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event, Event::StepStart { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event, Event::SessionCompacted { .. })));
     }
 
     #[test]
@@ -354,9 +363,7 @@ mod tests {
         assert!(captured
             .iter()
             .all(|record| !record.meta.event_id.is_empty()));
-        assert!(captured
-            .iter()
-            .all(|record| record.meta.timestamp_ms > 0));
+        assert!(captured.iter().all(|record| record.meta.timestamp_ms > 0));
         assert!(captured[0].meta.seq < captured[1].meta.seq);
         assert!(matches!(captured[0].event, Event::StepStart { .. }));
         assert!(matches!(captured[1].event, Event::StepFinish { .. }));
@@ -416,8 +423,7 @@ mod tests {
             records: Arc::clone(&records),
         };
 
-        TraceReplay::replay_to_record_sink_with_existing(&trace, &sink, &existing)
-            .expect("replay");
+        TraceReplay::replay_to_record_sink_with_existing(&trace, &sink, &existing).expect("replay");
 
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 1);
@@ -452,7 +458,9 @@ mod tests {
         assert!(array[0]["meta"].get("event_id").is_some());
         assert!(array[0]["meta"].get("timestamp_ms").is_some());
         assert!(array[0]["meta"].get("seq").is_some());
-        assert!(array[1]["meta"]["seq"].as_u64().unwrap() > array[0]["meta"]["seq"].as_u64().unwrap());
+        assert!(
+            array[1]["meta"]["seq"].as_u64().unwrap() > array[0]["meta"]["seq"].as_u64().unwrap()
+        );
     }
 
     #[test]
@@ -461,10 +469,7 @@ mod tests {
         trace.record_event(TraceEvent::NodeStart {
             node: "a".to_string(),
         });
-        let path = std::env::temp_dir().join(format!(
-            "forge-audit-{}.json",
-            uuid::Uuid::new_v4()
-        ));
+        let path = std::env::temp_dir().join(format!("forge-audit-{}.json", uuid::Uuid::new_v4()));
         TraceReplay::write_audit_log(&trace, &path).expect("write");
         let contents = std::fs::read_to_string(path).expect("read");
         assert!(contents.contains("StepStart"));
@@ -476,10 +481,8 @@ mod tests {
         trace.record_event(TraceEvent::NodeStart {
             node: "a".to_string(),
         });
-        let path = std::env::temp_dir().join(format!(
-            "forge-audit-records-{}.json",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("forge-audit-records-{}.json", uuid::Uuid::new_v4()));
         TraceReplay::write_audit_log_records(&trace, &path).expect("write");
         let contents = std::fs::read_to_string(path).expect("read");
         assert!(contents.contains("\"meta\""));
@@ -516,7 +519,11 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         let legacy = TraceReplay::replay_to_record_json(&trace);
-        std::fs::write(&path, serde_json::to_string_pretty(&legacy).expect("serialize")).expect("write");
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&legacy).expect("serialize"),
+        )
+        .expect("write");
 
         let records = TraceReplay::read_audit_log_records(&path).expect("read");
 
@@ -534,7 +541,11 @@ mod tests {
             "version": 2,
             "records": []
         });
-        std::fs::write(&path, serde_json::to_string_pretty(&value).expect("serialize")).expect("write");
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&value).expect("serialize"),
+        )
+        .expect("write");
 
         let err = TraceReplay::read_audit_log_records(&path).expect_err("error");
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
@@ -557,8 +568,7 @@ mod tests {
             records: Arc::clone(&records),
         };
 
-        TraceReplay::replay_to_record_sink_with_record_log(&trace, &sink, &path)
-            .expect("replay");
+        TraceReplay::replay_to_record_sink_with_record_log(&trace, &sink, &path).expect("replay");
 
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 1);
@@ -597,8 +607,11 @@ mod tests {
             "version": 1,
             "records": records,
         });
-        std::fs::write(&path, serde_json::to_string_pretty(&value).expect("serialize"))
-            .expect("write");
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&value).expect("serialize"),
+        )
+        .expect("write");
 
         let read = TraceReplay::read_audit_log_records(&path).expect("read");
 

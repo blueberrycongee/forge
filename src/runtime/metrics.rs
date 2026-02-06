@@ -1,12 +1,12 @@
-﻿//! Metrics collection for graph execution
+//! Metrics collection for graph execution
 //!
 //! Provides detailed metrics for each node and overall execution,
 //! enabling performance analysis and ablation studies.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use serde::{Serialize, Deserialize};
 
 /// Metrics for a single node execution
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -219,11 +219,11 @@ pub struct AggregateStats {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeAggregateStats {
     pub name: String,
-    pub call_rate: f64,      // % of runs that called this node
+    pub call_rate: f64, // % of runs that called this node
     pub avg_latency_ms: f64,
     pub avg_tokens: f64,
     pub error_rate: f64,
-    pub skip_rate: f64,      // % of runs that skipped this node
+    pub skip_rate: f64, // % of runs that skipped this node
 }
 
 impl AggregateStats {
@@ -248,9 +248,7 @@ impl AggregateStats {
         let avg_tokens = runs.iter().map(|r| r.total_tokens as f64).sum::<f64>() / run_count as f64;
 
         // Quality score
-        let quality_scores: Vec<f64> = runs.iter()
-            .filter_map(|r| r.quality_score)
-            .collect();
+        let quality_scores: Vec<f64> = runs.iter().filter_map(|r| r.quality_score).collect();
         let avg_quality_score = if quality_scores.is_empty() {
             None
         } else {
@@ -286,14 +284,29 @@ impl AggregateStats {
                 }
             }
 
-            node_stats.insert(node_name.clone(), NodeAggregateStats {
-                name: node_name,
-                call_rate: call_count as f64 / run_count as f64,
-                avg_latency_ms: if call_count > 0 { total_latency as f64 / call_count as f64 } else { 0.0 },
-                avg_tokens: if call_count > 0 { total_tokens as f64 / call_count as f64 } else { 0.0 },
-                error_rate: if call_count > 0 { error_count as f64 / call_count as f64 } else { 0.0 },
-                skip_rate: skip_count as f64 / run_count as f64,
-            });
+            node_stats.insert(
+                node_name.clone(),
+                NodeAggregateStats {
+                    name: node_name,
+                    call_rate: call_count as f64 / run_count as f64,
+                    avg_latency_ms: if call_count > 0 {
+                        total_latency as f64 / call_count as f64
+                    } else {
+                        0.0
+                    },
+                    avg_tokens: if call_count > 0 {
+                        total_tokens as f64 / call_count as f64
+                    } else {
+                        0.0
+                    },
+                    error_rate: if call_count > 0 {
+                        error_count as f64 / call_count as f64
+                    } else {
+                        0.0
+                    },
+                    skip_rate: skip_count as f64 / run_count as f64,
+                },
+            );
         }
 
         Self {
@@ -350,7 +363,9 @@ impl RunMetricsBuilder {
 
     /// End timing and record node metrics
     pub fn end_node(&mut self, tokens: u32) {
-        if let (Some(node), Some(start)) = (self.current_node.take(), self.current_node_start.take()) {
+        if let (Some(node), Some(start)) =
+            (self.current_node.take(), self.current_node_start.take())
+        {
             let latency_ms = start.elapsed().as_millis() as u64;
             self.metrics.record_node(&node, latency_ms, tokens);
         }
@@ -385,7 +400,7 @@ mod tests {
         let mut nm = NodeMetrics::new("test_node");
         nm.record_execution(100, 50);
         nm.record_execution(200, 100);
-        
+
         assert_eq!(nm.call_count, 2);
         assert_eq!(nm.total_latency_ms, 300);
         assert_eq!(nm.avg_latency_ms, 150.0);
@@ -408,7 +423,7 @@ mod tests {
     #[test]
     fn test_metrics_collector() {
         let collector = MetricsCollector::new();
-        
+
         let mut run1 = RunMetrics::new("run_1", "config_a");
         run1.record_node("node_a", 100, 50);
         run1.mark_success();

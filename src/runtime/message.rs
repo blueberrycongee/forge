@@ -65,8 +65,12 @@ impl Message {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Part {
-    TextDelta { delta: String },
-    TextFinal { text: String },
+    TextDelta {
+        delta: String,
+    },
+    TextFinal {
+        text: String,
+    },
     ToolCall {
         tool: String,
         call_id: String,
@@ -92,8 +96,12 @@ pub enum Part {
         mime_type: String,
         data: serde_json::Value,
     },
-    TokenUsage { usage: TokenUsage },
-    Error { message: String },
+    TokenUsage {
+        usage: TokenUsage,
+    },
+    Error {
+        message: String,
+    },
 }
 
 impl Part {
@@ -102,9 +110,7 @@ impl Part {
             Event::TextDelta { delta, .. } => Some(Part::TextDelta {
                 delta: delta.clone(),
             }),
-            Event::TextFinal { text, .. } => Some(Part::TextFinal {
-                text: text.clone(),
-            }),
+            Event::TextFinal { text, .. } => Some(Part::TextFinal { text: text.clone() }),
             Event::Attachment {
                 name,
                 mime_type,
@@ -154,7 +160,9 @@ impl Part {
                 call_id: call_id.clone(),
                 error: error.clone(),
             }),
-            Event::StepFinish { tokens, .. } => Some(Part::TokenUsage { usage: tokens.clone() }),
+            Event::StepFinish { tokens, .. } => Some(Part::TokenUsage {
+                usage: tokens.clone(),
+            }),
             _ => None,
         }
     }
@@ -346,7 +354,10 @@ mod tests {
     fn message_role_from_str_accepts_known_roles_case_insensitively() {
         assert_eq!(MessageRole::parse("system"), Some(MessageRole::System));
         assert_eq!(MessageRole::parse("USER"), Some(MessageRole::User));
-        assert_eq!(MessageRole::parse("Assistant"), Some(MessageRole::Assistant));
+        assert_eq!(
+            MessageRole::parse("Assistant"),
+            Some(MessageRole::Assistant)
+        );
         assert_eq!(MessageRole::parse("tool"), Some(MessageRole::Tool));
     }
 

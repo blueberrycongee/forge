@@ -1,11 +1,11 @@
-﻿//! Evaluator traits and implementations for assessing graph execution quality
+//! Evaluator traits and implementations for assessing graph execution quality
 //!
 //! Provides a flexible framework for evaluating Agent outputs with both
 //! rule-based and LLM-based evaluation strategies.
 
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::runtime::metrics::RunMetrics;
 
@@ -99,13 +99,14 @@ impl Evaluator for ExactMatchEvaluator {
             Some(expected) if &ctx.output == expected => {
                 EvalResult::passed(1.0, "Output exactly matches expected")
             }
-            Some(expected) => {
-                EvalResult::failed(0.0, format!(
+            Some(expected) => EvalResult::failed(
+                0.0,
+                format!(
                     "Output does not match. Expected: {:?}, Got: {:?}",
                     expected, ctx.output
-                ))
-            }
-            None => EvalResult::passed(0.5, "No expected output to compare")
+                ),
+            ),
+            None => EvalResult::passed(0.5, "No expected output to compare"),
         }
     }
 
@@ -221,7 +222,10 @@ impl Evaluator for ContainsEvaluator {
         } else {
             let mut msgs = Vec::new();
             if required_found < self.required.len() {
-                msgs.push(format!("Missing {} required keywords", self.required.len() - required_found));
+                msgs.push(format!(
+                    "Missing {} required keywords",
+                    self.required.len() - required_found
+                ));
             }
             if !forbidden_found.is_empty() {
                 msgs.push(format!("Found forbidden keywords: {:?}", forbidden_found));
@@ -284,7 +288,10 @@ impl ToolCallEvaluator {
 impl Evaluator for ToolCallEvaluator {
     fn evaluate(&self, ctx: &EvalContext) -> EvalResult {
         // Extract tool calls from execution path
-        let executed_nodes: Vec<&str> = ctx.metrics.execution_path.iter()
+        let executed_nodes: Vec<&str> = ctx
+            .metrics
+            .execution_path
+            .iter()
             .map(|s| s.as_str())
             .collect();
 
@@ -327,7 +334,8 @@ impl Evaluator for ToolCallEvaluator {
         let order_correct = if self.strict_order && !self.expected_order.is_empty() {
             let mut order_idx = 0;
             for node in &executed_nodes {
-                if order_idx < self.expected_order.len() && *node == self.expected_order[order_idx] {
+                if order_idx < self.expected_order.len() && *node == self.expected_order[order_idx]
+                {
                     order_idx += 1;
                 }
             }
@@ -339,7 +347,10 @@ impl Evaluator for ToolCallEvaluator {
                 message: if correct {
                     "Tools called in expected order".to_string()
                 } else {
-                    format!("Expected order: {:?}, Got: {:?}", self.expected_order, executed_nodes)
+                    format!(
+                        "Expected order: {:?}, Got: {:?}",
+                        self.expected_order, executed_nodes
+                    )
                 },
             });
             correct
@@ -363,8 +374,8 @@ impl Evaluator for ToolCallEvaluator {
         let order_factor = if order_correct { 1.0 } else { 0.8 };
 
         let score = ((required_score - forbidden_penalty) * order_factor).max(0.0);
-        let passed = required_found == self.required_tools.len() 
-            && forbidden_found.is_empty() 
+        let passed = required_found == self.required_tools.len()
+            && forbidden_found.is_empty()
             && order_correct;
 
         EvalResult {
@@ -413,12 +424,12 @@ impl LatencyEvaluator {
 impl Evaluator for LatencyEvaluator {
     fn evaluate(&self, ctx: &EvalContext) -> EvalResult {
         let latency = ctx.metrics.total_latency_ms;
-        
+
         let (score, passed) = if latency <= self.target_latency_ms {
             (1.0, true)
         } else if latency <= self.max_latency_ms {
             // Linear interpolation between target and max
-            let ratio = (self.max_latency_ms - latency) as f64 
+            let ratio = (self.max_latency_ms - latency) as f64
                 / (self.max_latency_ms - self.target_latency_ms) as f64;
             (0.5 + ratio * 0.5, true)
         } else {
@@ -446,7 +457,10 @@ impl Evaluator for LatencyEvaluator {
                 message: if passed {
                     format!("Latency {}ms within limit", latency)
                 } else {
-                    format!("Latency {}ms exceeds max {}ms", latency, self.max_latency_ms)
+                    format!(
+                        "Latency {}ms exceeds max {}ms",
+                        latency, self.max_latency_ms
+                    )
                 },
             }],
         }
@@ -477,12 +491,12 @@ impl TokenBudgetEvaluator {
 impl Evaluator for TokenBudgetEvaluator {
     fn evaluate(&self, ctx: &EvalContext) -> EvalResult {
         let tokens = ctx.metrics.total_tokens;
-        
+
         let (score, passed) = if tokens <= self.target_tokens {
             (1.0, true)
         } else if tokens <= self.max_tokens {
-            let ratio = (self.max_tokens - tokens) as f64 
-                / (self.max_tokens - self.target_tokens) as f64;
+            let ratio =
+                (self.max_tokens - tokens) as f64 / (self.max_tokens - self.target_tokens) as f64;
             (0.5 + ratio * 0.5, true)
         } else {
             let overage = (tokens - self.max_tokens) as f64 / self.max_tokens as f64;
@@ -548,16 +562,16 @@ impl Evaluator for CompositeEvaluator {
 
         for (evaluator, weight) in &self.evaluators {
             let result = evaluator.evaluate(ctx);
-            
+
             total_weight += weight;
             weighted_score += result.score * weight;
             all_passed = all_passed && result.passed;
-            
+
             // Prefix metrics with evaluator name
             for (key, value) in result.metrics {
                 all_metrics.insert(format!("{}_{}", evaluator.name(), key), value);
             }
-            
+
             all_details.extend(result.details);
             feedbacks.push(format!("{}: {}", evaluator.name(), result.feedback));
         }
@@ -629,10 +643,10 @@ mod tests {
     #[test]
     fn test_contains_evaluator() {
         let evaluator = ContainsEvaluator::new(vec!["hello".to_string(), "world".to_string()]);
-        
+
         let mut metrics = RunMetrics::new("r1", "c1");
         metrics.mark_success();
-        
+
         let ctx = EvalContext {
             output: Value::String("hello beautiful world".to_string()),
             expected: None,
@@ -649,14 +663,14 @@ mod tests {
     #[test]
     fn test_latency_evaluator() {
         let evaluator = LatencyEvaluator::new(1000);
-        
+
         let mut metrics = RunMetrics::new("r1", "c1");
         metrics.total_latency_ms = 500;
         metrics.mark_success();
 
         let ctx = make_test_context(Value::Null, metrics);
         let result = evaluator.evaluate(&ctx);
-        
+
         assert!(result.passed);
         assert_eq!(result.score, 1.0);
     }

@@ -7,10 +7,7 @@ use crate::runtime::error::GraphResult;
 use crate::runtime::event::{EventRecordSink, EventSink, NoopEventSink};
 use crate::runtime::executor::CompiledGraph;
 use crate::runtime::output::{
-    JsonLineEventRecordSink,
-    JsonLineEventSink,
-    SseEventRecordSink,
-    SseEventSink,
+    JsonLineEventRecordSink, JsonLineEventSink, SseEventRecordSink, SseEventSink,
 };
 use crate::runtime::state::GraphState;
 
@@ -45,10 +42,7 @@ where
         (PlatformOutputFormat::JsonLines, PlatformStreamMode::Record) => {
             let record_sink: Arc<dyn EventRecordSink> =
                 Arc::new(JsonLineEventRecordSink::new(writer));
-            let config = graph
-                .config()
-                .clone()
-                .with_event_record_sink(record_sink);
+            let config = graph.config().clone().with_event_record_sink(record_sink);
             let graph = graph.clone().with_config(config);
             let sink: Arc<dyn EventSink> = Arc::new(NoopEventSink);
             graph.stream_events(state, sink).await
@@ -58,12 +52,8 @@ where
             graph.stream_events(state, sink).await
         }
         (PlatformOutputFormat::Sse, PlatformStreamMode::Record) => {
-            let record_sink: Arc<dyn EventRecordSink> =
-                Arc::new(SseEventRecordSink::new(writer));
-            let config = graph
-                .config()
-                .clone()
-                .with_event_record_sink(record_sink);
+            let record_sink: Arc<dyn EventRecordSink> = Arc::new(SseEventRecordSink::new(writer));
+            let config = graph.config().clone().with_event_record_sink(record_sink);
             let graph = graph.clone().with_config(config);
             let sink: Arc<dyn EventSink> = Arc::new(NoopEventSink);
             graph.stream_events(state, sink).await

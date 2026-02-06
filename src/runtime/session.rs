@@ -1,4 +1,4 @@
-﻿//! Session snapshot structures for export/import.
+//! Session snapshot structures for export/import.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -41,9 +41,11 @@ impl SessionMessage {
         let role = crate::runtime::message::MessageRole::parse(&self.role)?;
         let mut message = crate::runtime::message::Message::new(role);
         if !self.content.is_empty() {
-            message.parts.push(crate::runtime::message::Part::TextFinal {
-                text: self.content.clone(),
-            });
+            message
+                .parts
+                .push(crate::runtime::message::Part::TextFinal {
+                    text: self.content.clone(),
+                });
         }
         Some(message)
     }
@@ -84,7 +86,6 @@ impl SessionSnapshot {
             .collect()
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CheckpointRecord {
@@ -214,7 +215,6 @@ impl SessionStore {
         Ok(snapshot.to_messages())
     }
 }
-
 
 /// Append-only run log store (JSONL).
 pub struct RunLogStore {
@@ -360,7 +360,8 @@ impl FileAttachmentStore {
     }
 
     fn attachment_path(&self, attachment_id: &str) -> PathBuf {
-        self.attachments_dir().join(format!("{}.json", attachment_id))
+        self.attachments_dir()
+            .join(format!("{}.json", attachment_id))
     }
 
     pub fn save(&self, record: &AttachmentRecord) -> std::io::Result<()> {
@@ -386,9 +387,8 @@ impl AttachmentStore for FileAttachmentStore {
     fn store(&self, attachment: &ToolAttachment) -> Result<String, GraphError> {
         let attachment_id = uuid::Uuid::new_v4().to_string();
         let record = AttachmentRecord::new(attachment_id.clone(), attachment.clone());
-        self.save(&record).map_err(|err| {
-            GraphError::Other(format!("attachment store error: {}", err))
-        })?;
+        self.save(&record)
+            .map_err(|err| GraphError::Other(format!("attachment store error: {}", err)))?;
         Ok(format!("attachment://{}", attachment_id))
     }
 }
@@ -417,10 +417,7 @@ impl AttachmentResolver {
 
     pub fn resolve_id(&self, attachment_id: &str) -> std::io::Result<AttachmentRecord> {
         let attachment_id = Self::validate_id(attachment_id).ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "invalid attachment id",
-            )
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid attachment id")
         })?;
         self.store.load(attachment_id)
     }
@@ -450,11 +447,13 @@ impl AttachmentResolver {
 
 #[cfg(test)]
 mod tests {
-    use super::{AttachmentResolver, SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore};
+    use super::{
+        AttachmentResolver, SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore,
+    };
     use crate::runtime::compaction::CompactionResult;
     use crate::runtime::message::{Message, MessageRole, Part};
-    use crate::runtime::trace::{ExecutionTrace, TraceEvent};
     use crate::runtime::tool::{AttachmentStore, ToolAttachment, ToolOutput};
+    use crate::runtime::trace::{ExecutionTrace, TraceEvent};
 
     #[test]
     fn session_snapshot_roundtrip() {
@@ -466,7 +465,9 @@ mod tests {
         snapshot.trace.record_event(TraceEvent::NodeStart {
             node: "n1".to_string(),
         });
-        snapshot.compactions.push(CompactionResult::new("summary", 1));
+        snapshot
+            .compactions
+            .push(CompactionResult::new("summary", 1));
 
         let json = serde_json::to_value(&snapshot).expect("serialize");
         let decoded: SessionSnapshot = serde_json::from_value(json).expect("deserialize");
@@ -676,18 +677,18 @@ mod tests {
     fn attachment_resolver_loads_reference_payload() {
         let temp = std::env::temp_dir().join(format!("forge-attach-{}", uuid::Uuid::new_v4()));
         let store = super::FileAttachmentStore::new(temp.clone());
-        let attachment = ToolAttachment::inline(
-            "notes.txt",
-            "text/plain",
-            serde_json::json!({"ok": true}),
-        );
+        let attachment =
+            ToolAttachment::inline("notes.txt", "text/plain", serde_json::json!({"ok": true}));
         let reference = store.store(&attachment).expect("store");
 
         let resolver = AttachmentResolver::new(temp);
         let record = resolver.resolve_reference(&reference).expect("resolve");
 
         assert_eq!(record.attachment, attachment);
-        assert_eq!(AttachmentResolver::parse_reference(&reference), Some(record.attachment_id.as_str()));
+        assert_eq!(
+            AttachmentResolver::parse_reference(&reference),
+            Some(record.attachment_id.as_str())
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
-﻿//! Node definitions for Forge
-//! 
+//! Node definitions for Forge
+//!
 //! A node is a function that takes state and returns updated state.
 
 use std::future::Future;
@@ -14,7 +14,7 @@ use crate::runtime::state::GraphState;
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Node function signature
-/// 
+///
 /// A node function takes the current state and returns the updated state.
 pub type NodeFn<S> = Arc<dyn Fn(S) -> BoxFuture<'static, GraphResult<S>> + Send + Sync>;
 
@@ -28,7 +28,7 @@ pub type StreamNodeFn<S> =
 pub trait Node<S: GraphState>: Send + Sync {
     /// Get the node's name
     fn name(&self) -> &str;
-    
+
     /// Execute the node
     fn execute(&self, state: S) -> BoxFuture<'_, GraphResult<S>>;
 }
@@ -93,7 +93,7 @@ impl<S: GraphState> NodeSpec<S> {
             metadata: None,
         }
     }
-    
+
     /// Add metadata to the node
     pub fn with_metadata(mut self, metadata: NodeMetadata) -> Self {
         self.metadata = Some(metadata);
@@ -110,7 +110,7 @@ impl<S: GraphState> NodeSpec<S> {
         self.stream_func = Some(stream_func);
         self
     }
-    
+
     /// Set retry count
     pub fn with_retry(mut self, count: usize) -> Self {
         let metadata = self.metadata.get_or_insert_with(NodeMetadata::default);
@@ -136,7 +136,7 @@ impl<S: GraphState> Node<S> for NodeSpec<S> {
     fn name(&self) -> &str {
         &self.name
     }
-    
+
     fn execute(&self, state: S) -> BoxFuture<'_, GraphResult<S>> {
         (self.func)(state)
     }
@@ -144,7 +144,11 @@ impl<S: GraphState> Node<S> for NodeSpec<S> {
 
 impl<S: GraphState> NodeSpec<S> {
     /// Execute node using stream function if present.
-    pub fn execute_stream(&self, state: S, sink: Arc<dyn EventSink>) -> BoxFuture<'_, GraphResult<S>> {
+    pub fn execute_stream(
+        &self,
+        state: S,
+        sink: Arc<dyn EventSink>,
+    ) -> BoxFuture<'_, GraphResult<S>> {
         if let Some(stream) = &self.stream_func {
             return (stream)(state, sink);
         }

@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 
 use forge::runtime::constants::{END, START};
 use forge::runtime::error::GraphError;
@@ -22,46 +22,50 @@ fn main() -> Result<(), GraphError> {
 
     let registry = Arc::new(builtin_tool_registry(&root));
 
-    let node = LoopNode::with_tools("workflow", Arc::clone(&registry), |mut state: WorkflowState, ctx| async move {
-        let read = ctx
-            .run_tool(tool::ToolCall::new(
-                "read",
-                "call-read",
-                serde_json::json!({"path": "input.txt"}),
+    let node = LoopNode::with_tools(
+        "workflow",
+        Arc::clone(&registry),
+        |mut state: WorkflowState, ctx| async move {
+            let read = ctx
+                .run_tool(tool::ToolCall::new(
+                    "read",
+                    "call-read",
+                    serde_json::json!({"path": "input.txt"}),
+                ))
+                .await?;
+            let content = read
+                .content
+                .get("content")
+                .and_then(|value| value.as_str())
+                .unwrap_or("")
+                .to_string();
+            state.results.push(content);
+
+            ctx.run_tool(tool::ToolCall::new(
+                "write",
+                "call-write",
+                serde_json::json!({"path": "output.txt", "content": "done"}),
             ))
             .await?;
-        let content = read
-            .content
-            .get("content")
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string();
-        state.results.push(content);
 
-        ctx.run_tool(tool::ToolCall::new(
-            "write",
-            "call-write",
-            serde_json::json!({"path": "output.txt", "content": "done"}),
-        ))
-        .await?;
+            let confirm = ctx
+                .run_tool(tool::ToolCall::new(
+                    "read",
+                    "call-confirm",
+                    serde_json::json!({"path": "output.txt"}),
+                ))
+                .await?;
+            let confirm_content = confirm
+                .content
+                .get("content")
+                .and_then(|value| value.as_str())
+                .unwrap_or("")
+                .to_string();
+            state.results.push(confirm_content);
 
-        let confirm = ctx
-            .run_tool(tool::ToolCall::new(
-                "read",
-                "call-confirm",
-                serde_json::json!({"path": "output.txt"}),
-            ))
-            .await?;
-        let confirm_content = confirm
-            .content
-            .get("content")
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string();
-        state.results.push(confirm_content);
-
-        Ok(state)
-    });
+            Ok(state)
+        },
+    );
 
     let mut graph = StateGraph::<WorkflowState>::new();
     graph.add_node_spec(node.into_node());

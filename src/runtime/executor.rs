@@ -1,44 +1,37 @@
-﻿//! Graph executor - runs the compiled graph
+//! Graph executor - runs the compiled graph
 //!
 //! Supports:
 //! - Interrupt/resume for human-in-the-loop workflows
 //! - Node masking for ablation studies
 //! - Metrics collection for performance analysis
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use serde::{Serialize, Deserialize};
 
-use crate::runtime::constants::{START, END, MAX_ITERATIONS};
-use crate::runtime::cancel::CancellationToken;
-use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
-use crate::runtime::state::GraphState;
-use crate::runtime::graph::{evaluate_branch, Edge, StateGraph};
-use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSequencer, EventSink, TokenUsage};
-use crate::runtime::compaction::{
-    CompactionContext,
-    CompactionHook,
-    CompactionPolicy,
-    NoopCompactionHook,
-    CompactionResult,
-};
-use crate::runtime::prune::{PrunePolicy, prune_tool_events};
-use crate::runtime::trace::{ExecutionTrace, TraceEvent};
-use crate::runtime::message::{Message, MessageRole, Part};
-use crate::runtime::session::SessionSnapshot;
-use crate::runtime::node::{Node, NodeSpec};
-use crate::runtime::branch::BranchSpec;
-use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
 use crate::runtime::ablation::NodeOverride;
-use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
-use crate::runtime::tool::{
-    AttachmentPolicy,
-    AttachmentStore,
-    ToolCall,
-    ToolContext,
-    ToolOutput,
-    ToolRegistry,
+use crate::runtime::branch::BranchSpec;
+use crate::runtime::cancel::CancellationToken;
+use crate::runtime::compaction::{
+    CompactionContext, CompactionHook, CompactionPolicy, CompactionResult, NoopCompactionHook,
 };
+use crate::runtime::constants::{END, MAX_ITERATIONS, START};
+use crate::runtime::error::{GraphError, GraphResult, Interrupt, ResumeCommand};
+use crate::runtime::event::{
+    Event, EventRecord, EventRecordSink, EventSequencer, EventSink, TokenUsage,
+};
+use crate::runtime::graph::{evaluate_branch, Edge, StateGraph};
+use crate::runtime::message::{Message, MessageRole, Part};
+use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
+use crate::runtime::node::{Node, NodeSpec};
+use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
+use crate::runtime::prune::{prune_tool_events, PrunePolicy};
+use crate::runtime::session::SessionSnapshot;
+use crate::runtime::state::GraphState;
+use crate::runtime::tool::{
+    AttachmentPolicy, AttachmentStore, ToolCall, ToolContext, ToolOutput, ToolRegistry,
+};
+use crate::runtime::trace::{ExecutionTrace, TraceEvent};
 
 /// Configuration for graph execution
 #[derive(Clone)]
@@ -176,10 +169,7 @@ impl ExecutionConfig {
     }
 
     /// Attach an event history buffer for stream_events
-    pub fn with_event_history(
-        mut self,
-        history: Arc<std::sync::Mutex<Vec<EventRecord>>>,
-    ) -> Self {
+    pub fn with_event_history(mut self, history: Arc<std::sync::Mutex<Vec<EventRecord>>>) -> Self {
         self.event_history = Some(history);
         self
     }
@@ -218,11 +208,7 @@ impl ExecutionConfig {
     }
 
     /// Seed session snapshot with structured messages.
-    pub fn with_snapshot_messages<I>(
-        mut self,
-        session_id: impl Into<String>,
-        messages: I,
-    ) -> Self
+    pub fn with_snapshot_messages<I>(mut self, session_id: impl Into<String>, messages: I) -> Self
     where
         I: IntoIterator<Item = Message>,
     {
@@ -425,7 +411,10 @@ impl<S: GraphState> CompiledGraph<S> {
     }
 
     /// Execute and return metrics
-    pub async fn invoke_with_metrics(&self, initial_state: S) -> GraphResult<ExecutionResultWithMetrics<S>> {
+    pub async fn invoke_with_metrics(
+        &self,
+        initial_state: S,
+    ) -> GraphResult<ExecutionResultWithMetrics<S>> {
         let run_id = uuid::Uuid::new_v4().to_string();
         let mut metrics_builder = if self.config.collect_metrics {
             Some(RunMetricsBuilder::new(&run_id, &self.config.config_id))
@@ -463,7 +452,9 @@ impl<S: GraphState> CompiledGraph<S> {
             }
 
             // Execute the node
-            let node = self.nodes.get(&current_node)
+            let node = self
+                .nodes
+                .get(&current_node)
                 .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
 
             match node.execute(state).await {
@@ -525,7 +516,9 @@ impl<S: GraphState> CompiledGraph<S> {
             }
 
             // Execute the node
-            let node = self.nodes.get(&current_node)
+            let node = self
+                .nodes
+                .get(&current_node)
                 .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
 
             state = node.execute(state).await?;
@@ -546,7 +539,11 @@ impl<S: GraphState> CompiledGraph<S> {
 
     /// Execute with runtime event streaming.
     /// Nodes that define a stream function will emit events via the sink.
-    pub async fn stream_events(&self, initial_state: S, sink: std::sync::Arc<dyn EventSink>) -> GraphResult<S> {
+    pub async fn stream_events(
+        &self,
+        initial_state: S,
+        sink: std::sync::Arc<dyn EventSink>,
+    ) -> GraphResult<S> {
         let mut state = initial_state;
         let mut current_node = self.get_next_node(START, &state)?;
         let mut iterations = 0;
@@ -563,11 +560,7 @@ impl<S: GraphState> CompiledGraph<S> {
         let trace = self.config.trace.clone();
         let snapshot = self.config.session_snapshot.clone();
         let sink: Arc<dyn EventSink> = if use_history {
-            Arc::new(RecordingSink::new(
-                sink,
-                Arc::clone(&history),
-                record_sink,
-            ))
+            Arc::new(RecordingSink::new(sink, Arc::clone(&history), record_sink))
         } else {
             sink
         };
@@ -587,12 +580,9 @@ impl<S: GraphState> CompiledGraph<S> {
                 .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
 
             if let Some(trace) = &trace {
-                trace
-                    .lock()
-                    .unwrap()
-                    .record_event(TraceEvent::NodeStart {
-                        node: current_node.clone(),
-                    });
+                trace.lock().unwrap().record_event(TraceEvent::NodeStart {
+                    node: current_node.clone(),
+                });
             }
             state = node.execute_stream(state, sink.clone()).await?;
             if let Some(snapshot) = &snapshot {
@@ -603,15 +593,15 @@ impl<S: GraphState> CompiledGraph<S> {
                 snapshot.lock().unwrap().push_message(&message);
             }
             if let Some(trace) = &trace {
-                trace
-                    .lock()
-                    .unwrap()
-                    .record_event(TraceEvent::NodeFinish {
-                        node: current_node.clone(),
-                    });
+                trace.lock().unwrap().record_event(TraceEvent::NodeFinish {
+                    node: current_node.clone(),
+                });
             }
 
-            if use_history && self.config.prune_policy.enabled && self.config.prune_before_compaction {
+            if use_history
+                && self.config.prune_policy.enabled
+                && self.config.prune_before_compaction
+            {
                 let mut events = history.lock().unwrap();
                 prune_tool_events(&mut events, &self.config.prune_policy);
             }
@@ -660,7 +650,10 @@ impl<S: GraphState> CompiledGraph<S> {
                 }
             }
 
-            if use_history && self.config.prune_policy.enabled && !self.config.prune_before_compaction {
+            if use_history
+                && self.config.prune_policy.enabled
+                && !self.config.prune_before_compaction
+            {
                 let mut events = history.lock().unwrap();
                 prune_tool_events(&mut events, &self.config.prune_policy);
             }
@@ -725,7 +718,13 @@ impl<S: GraphState> CompiledGraph<S> {
             status: crate::runtime::session_state::RunStatus::Running,
         })?;
         let result = self
-            .run_with_checkpoint(run_id.clone(), initial_state, START.to_string(), 0, HashMap::new())
+            .run_with_checkpoint(
+                run_id.clone(),
+                initial_state,
+                START.to_string(),
+                0,
+                HashMap::new(),
+            )
             .await;
         match &result {
             Ok(ExecutionResult::Complete(_)) => {
@@ -757,7 +756,11 @@ impl<S: GraphState> CompiledGraph<S> {
     }
 
     /// Resume from checkpoint
-    pub async fn resume(&self, checkpoint: Checkpoint<S>, command: ResumeCommand) -> GraphResult<ExecutionResult<S>> {
+    pub async fn resume(
+        &self,
+        checkpoint: Checkpoint<S>,
+        command: ResumeCommand,
+    ) -> GraphResult<ExecutionResult<S>> {
         let mut resume_values = checkpoint.resume_values;
         let resume_value = command.value.clone();
 
@@ -834,7 +837,10 @@ impl<S: GraphState> CompiledGraph<S> {
             iterations += 1;
 
             if self.config.debug {
-                println!("[Forge] Executing node: {} (iteration {})", current_node, iterations);
+                println!(
+                    "[Forge] Executing node: {} (iteration {})",
+                    current_node, iterations
+                );
             }
 
             // Check if masked
@@ -849,14 +855,13 @@ impl<S: GraphState> CompiledGraph<S> {
             // Check if we have a resume value for this node
             let has_resume = resume_values.contains_key(&current_node);
             if let Some(value) = resume_values.get(&current_node) {
-                state.set(
-                    &format!("resume:{}", current_node),
-                    Box::new(value.clone()),
-                );
+                state.set(&format!("resume:{}", current_node), Box::new(value.clone()));
             }
 
             // Execute the node
-            let node = self.nodes.get(&current_node)
+            let node = self
+                .nodes
+                .get(&current_node)
                 .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
 
             match node.execute(state.clone()).await {
@@ -915,7 +920,7 @@ impl<S: GraphState> CompiledGraph<S> {
 
         for config in configs {
             let config_id = config.config_id.clone();
-            
+
             for input in &test_inputs {
                 // Create a new graph with this config
                 let graph = CompiledGraph {
@@ -1010,7 +1015,12 @@ fn resolve_latest_token_usage(
 ) -> Option<TokenUsage> {
     let events = history.lock().unwrap();
     for record in events.iter().rev() {
-        if let Event::StepFinish { session_id: event_session_id, tokens, .. } = &record.event {
+        if let Event::StepFinish {
+            session_id: event_session_id,
+            tokens,
+            ..
+        } = &record.event
+        {
             if event_session_id == session_id {
                 return Some(tokens.clone());
             }
@@ -1020,11 +1030,7 @@ fn resolve_latest_token_usage(
 }
 
 fn token_usage_total(tokens: &TokenUsage) -> u64 {
-    tokens.input
-        + tokens.output
-        + tokens.reasoning
-        + tokens.cache_read
-        + tokens.cache_write
+    tokens.input + tokens.output + tokens.reasoning + tokens.cache_read + tokens.cache_write
 }
 
 fn collect_compaction_messages(
@@ -1101,9 +1107,9 @@ mod tests {
     use crate::runtime::output::JsonLineEventSink;
     use crate::runtime::prune::PrunePolicy;
     use crate::runtime::state::GraphState;
+    use futures::executor::block_on;
     use std::io;
     use std::sync::{Arc, Mutex};
-    use futures::executor::block_on;
 
     #[test]
     fn test_execution_config() {
@@ -1213,7 +1219,8 @@ mod tests {
         graph.add_edge("streamer", END);
 
         let compiled = graph.compile().expect("compile");
-        let final_state = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
+        let final_state =
+            block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         assert_eq!(final_state.steps, vec!["stream".to_string()]);
         assert_eq!(events.lock().unwrap().len(), 1);
@@ -1223,7 +1230,10 @@ mod tests {
 
     impl io::Write for FailingWriter {
         fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "sink write failed"))
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "sink write failed",
+            ))
         }
 
         fn flush(&mut self) -> io::Result<()> {
@@ -1296,15 +1306,12 @@ mod tests {
         graph.add_edge(START, "streamer");
         graph.add_edge("streamer", END);
 
-        let compiled = graph
-            .compile()
-            .expect("compile")
-            .with_config(
-                ExecutionConfig::new()
-                    .with_compaction_hook(hook)
-                    .with_compaction_policy(CompactionPolicy::new(0))
-                    .with_session_snapshot(Arc::clone(&snapshot)),
-            );
+        let compiled = graph.compile().expect("compile").with_config(
+            ExecutionConfig::new()
+                .with_compaction_hook(hook)
+                .with_compaction_policy(CompactionPolicy::new(0))
+                .with_session_snapshot(Arc::clone(&snapshot)),
+        );
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         let captured = events.lock().unwrap();
@@ -1345,9 +1352,7 @@ mod tests {
 
         let captured = records.lock().unwrap();
         assert!(!captured.is_empty());
-        assert!(captured
-            .iter()
-            .all(|record| record.meta.timestamp_ms > 0));
+        assert!(captured.iter().all(|record| record.meta.timestamp_ms > 0));
         assert!(captured
             .iter()
             .all(|record| !record.meta.event_id.is_empty()));
@@ -1391,18 +1396,15 @@ mod tests {
         graph.add_edge(START, "node");
         graph.add_edge("node", END);
 
-        let compiled = graph
-            .compile()
-            .expect("compile")
-            .with_config(
-                ExecutionConfig::new()
-                    .with_event_history(Arc::clone(&history))
-                    .with_prune_policy(PrunePolicy::new(0))
-                    .with_prune_before_compaction(true)
-                    .with_compaction_policy(CompactionPolicy::new(0))
-                    .with_compaction_hook(hook)
-                    .with_session_snapshot(Arc::clone(&snapshot)),
-            );
+        let compiled = graph.compile().expect("compile").with_config(
+            ExecutionConfig::new()
+                .with_event_history(Arc::clone(&history))
+                .with_prune_policy(PrunePolicy::new(0))
+                .with_prune_before_compaction(true)
+                .with_compaction_policy(CompactionPolicy::new(0))
+                .with_compaction_hook(hook)
+                .with_session_snapshot(Arc::clone(&snapshot)),
+        );
 
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
@@ -1460,25 +1462,24 @@ mod tests {
         graph.add_edge("first", "second");
         graph.add_edge("second", END);
 
-        let compiled = graph
-            .compile()
-            .expect("compile")
-            .with_config(
-                ExecutionConfig::new()
-                    .with_event_history(Arc::clone(&history))
-                    .with_prune_policy(PrunePolicy::new(2)),
-            );
+        let compiled = graph.compile().expect("compile").with_config(
+            ExecutionConfig::new()
+                .with_event_history(Arc::clone(&history))
+                .with_prune_policy(PrunePolicy::new(2)),
+        );
 
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         let events = history.lock().unwrap();
-        assert!(events.iter().any(|record| matches!(record.event, Event::TextDelta { .. })));
-        assert!(!events
-            .iter()
-            .any(|record| matches!(&record.event, Event::ToolStart { call_id, .. } if call_id == "1")));
         assert!(events
             .iter()
-            .any(|record| matches!(&record.event, Event::ToolStart { call_id, .. } if call_id == "2")));
+            .any(|record| matches!(record.event, Event::TextDelta { .. })));
+        assert!(!events.iter().any(
+            |record| matches!(&record.event, Event::ToolStart { call_id, .. } if call_id == "1")
+        ));
+        assert!(events.iter().any(
+            |record| matches!(&record.event, Event::ToolStart { call_id, .. } if call_id == "2")
+        ));
     }
 
     #[test]
@@ -1501,8 +1502,14 @@ mod tests {
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 
         let trace = trace.lock().unwrap();
-        assert!(trace.events.iter().any(|event| matches!(event, TraceEvent::NodeStart { .. })));
-        assert!(trace.events.iter().any(|event| matches!(event, TraceEvent::NodeFinish { .. })));
+        assert!(trace
+            .events
+            .iter()
+            .any(|event| matches!(event, TraceEvent::NodeStart { .. })));
+        assert!(trace
+            .events
+            .iter()
+            .any(|event| matches!(event, TraceEvent::NodeFinish { .. })));
     }
 
     #[test]
@@ -1518,14 +1525,11 @@ mod tests {
         graph.add_edge(START, "node");
         graph.add_edge("node", END);
 
-        let compiled = graph
-            .compile()
-            .expect("compile")
-            .with_config(
-                ExecutionConfig::new()
-                    .with_trace(Arc::clone(&trace))
-                    .with_session_snapshot(Arc::clone(&snapshot)),
-            );
+        let compiled = graph.compile().expect("compile").with_config(
+            ExecutionConfig::new()
+                .with_trace(Arc::clone(&trace))
+                .with_session_snapshot(Arc::clone(&snapshot)),
+        );
 
         let _ = block_on(compiled.stream_events(StreamState::default(), sink)).expect("run");
 

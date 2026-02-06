@@ -148,12 +148,7 @@ impl<W: Write + Send> EventRecordSink for SseEventRecordSink<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        JsonLineEventRecordSink,
-        JsonLineEventSink,
-        SseEventRecordSink,
-        SseEventSink,
-    };
+    use super::{JsonLineEventRecordSink, JsonLineEventSink, SseEventRecordSink, SseEventSink};
     use crate::runtime::error::GraphError;
     use crate::runtime::event::{Event, EventMeta, EventRecord, EventRecordSink, EventSink};
     use std::io;
@@ -230,7 +225,10 @@ mod tests {
 
     impl io::Write for FailingWriter {
         fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "sink write failed"))
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "sink write failed",
+            ))
         }
 
         fn flush(&mut self) -> io::Result<()> {

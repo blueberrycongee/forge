@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 
 use forge::runtime::constants::{END, START};
 use forge::runtime::error::{GraphError, ResumeCommand};
@@ -6,20 +6,12 @@ use forge::runtime::event::PermissionReply;
 use forge::runtime::executor::ExecutionResult;
 use forge::runtime::graph::StateGraph;
 use forge::runtime::permission::{
-    PermissionDecision,
-    PermissionPolicy,
-    PermissionRule,
-    PermissionSession,
+    PermissionDecision, PermissionPolicy, PermissionRule, PermissionSession,
 };
 use forge::runtime::prelude::LoopNode;
 use forge::runtime::state::GraphState;
 use forge::runtime::tool::{
-    AttachmentPolicy,
-    AttachmentPayload,
-    ToolAttachment,
-    ToolCall,
-    ToolContext,
-    ToolOutput,
+    AttachmentPayload, AttachmentPolicy, ToolAttachment, ToolCall, ToolContext, ToolOutput,
     ToolRegistry,
 };
 use futures::executor::block_on;
@@ -34,16 +26,12 @@ impl GraphState for ContextState {}
 
 fn describe_attachment(attachment: &ToolAttachment) -> String {
     match &attachment.payload {
-        AttachmentPayload::Inline { .. } => format!(
-            "inline:{}:{}",
-            attachment.name,
-            attachment.mime_type
-        ),
+        AttachmentPayload::Inline { .. } => {
+            format!("inline:{}:{}", attachment.name, attachment.mime_type)
+        }
         AttachmentPayload::Reference { reference } => format!(
             "ref:{}:{}:{}",
-            attachment.name,
-            attachment.mime_type,
-            reference
+            attachment.name, attachment.mime_type, reference
         ),
     }
 }
@@ -60,9 +48,9 @@ fn run_with_permissions(
             let resumed = block_on(compiled.resume(checkpoint, ResumeCommand::new("always")))?;
             match resumed {
                 ExecutionResult::Complete(state) => Ok(state),
-                ExecutionResult::Interrupted { .. } => Err(GraphError::Other(
-                    "run is still interrupted".to_string(),
-                )),
+                ExecutionResult::Interrupted { .. } => {
+                    Err(GraphError::Other("run is still interrupted".to_string()))
+                }
             }
         }
     }
@@ -70,40 +58,36 @@ fn run_with_permissions(
 
 fn main() -> Result<(), GraphError> {
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::new(vec![
-        PermissionRule::new(
-            PermissionDecision::Ask,
-            vec!["perm:report".to_string()],
-        ),
+        PermissionRule::new(PermissionDecision::Ask, vec!["perm:report".to_string()]),
     ])));
 
     let mut registry = ToolRegistry::new();
-    registry.register("report", Arc::new(|call, ctx: ToolContext| {
-        Box::pin(async move {
-            ctx.ask_permission("perm:report")?;
-            if call.input.get("abort").and_then(|value| value.as_bool()) == Some(true) {
-                return ctx.abort("user requested abort");
-            }
+    registry.register(
+        "report",
+        Arc::new(|call, ctx: ToolContext| {
+            Box::pin(async move {
+                ctx.ask_permission("perm:report")?;
+                if call.input.get("abort").and_then(|value| value.as_bool()) == Some(true) {
+                    return ctx.abort("user requested abort");
+                }
 
-            let summary = serde_json::json!({
-                "title": "Weekly report",
-                "items": ["alpha", "beta", "gamma"],
-            });
-            let big_blob = serde_json::json!("this payload is larger than the inline limit");
+                let summary = serde_json::json!({
+                    "title": "Weekly report",
+                    "items": ["alpha", "beta", "gamma"],
+                });
+                let big_blob = serde_json::json!("this payload is larger than the inline limit");
 
-            Ok(ToolOutput::text("report ready")
-                .with_mime_type("text/plain")
-                .with_attachment(ToolAttachment::inline(
-                    "summary.json",
-                    "application/json",
-                    summary,
-                ))
-                .with_attachment(ToolAttachment::inline(
-                    "blob.txt",
-                    "text/plain",
-                    big_blob,
-                )))
-        })
-    }));
+                Ok(ToolOutput::text("report ready")
+                    .with_mime_type("text/plain")
+                    .with_attachment(ToolAttachment::inline(
+                        "summary.json",
+                        "application/json",
+                        summary,
+                    ))
+                    .with_attachment(ToolAttachment::inline("blob.txt", "text/plain", big_blob)))
+            })
+        }),
+    );
 
     let registry = Arc::new(registry);
     let node = LoopNode::with_tools_and_gate_and_policy(
@@ -119,9 +103,7 @@ fn main() -> Result<(), GraphError> {
                     serde_json::json!({"abort": state.abort}),
                 ))
                 .await?;
-            state
-                .logs
-                .push(format!("content: {}", output.content));
+            state.logs.push(format!("content: {}", output.content));
             for attachment in &output.attachments {
                 state.logs.push(describe_attachment(attachment));
             }

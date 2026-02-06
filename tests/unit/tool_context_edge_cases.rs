@@ -4,12 +4,7 @@ use forge::runtime::error::GraphError;
 use forge::runtime::event::{Event, EventSink};
 use forge::runtime::permission::{PermissionPolicy, PermissionSession};
 use forge::runtime::tool::{
-    AttachmentPayload,
-    AttachmentPolicy,
-    ToolAttachment,
-    ToolCall,
-    ToolContext,
-    ToolOutput,
+    AttachmentPayload, AttachmentPolicy, ToolAttachment, ToolCall, ToolContext, ToolOutput,
     ToolRunner,
 };
 use futures::executor::block_on;
@@ -28,7 +23,9 @@ impl EventSink for CaptureSink {
 #[test]
 fn attachment_store_missing_for_oversize_inline_payload_errors() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
 
     let call = ToolCall::new("emit", "call-1", serde_json::json!({}));
@@ -46,9 +43,11 @@ fn attachment_store_missing_for_oversize_inline_payload_errors() {
         serde_json::json!("this-is-large"),
     ));
 
-    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
-        Ok(output)
-    }));
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move { Ok(output) },
+    ));
 
     assert!(matches!(
         result,
@@ -64,7 +63,9 @@ fn attachment_store_missing_for_oversize_inline_payload_errors() {
 #[test]
 fn attachment_inline_at_threshold_keeps_inline_payload() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
 
     let payload = serde_json::json!("data");
@@ -84,13 +85,18 @@ fn attachment_inline_at_threshold_keeps_inline_payload() {
         payload,
     ));
 
-    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
-        Ok(output)
-    }))
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move { Ok(output) },
+    ))
     .expect("run");
 
     let attachment = result.attachments.first().expect("attachment");
-    assert!(matches!(attachment.payload, AttachmentPayload::Inline { .. }));
+    assert!(matches!(
+        attachment.payload,
+        AttachmentPayload::Inline { .. }
+    ));
     assert_eq!(attachment.size, Some(size as u64));
     assert!(events
         .lock()
@@ -102,7 +108,9 @@ fn attachment_inline_at_threshold_keeps_inline_payload() {
 #[test]
 fn attachment_reference_payload_passes_through_without_store() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
 
     let call = ToolCall::new("emit", "call-3", serde_json::json!({}));
@@ -121,9 +129,11 @@ fn attachment_reference_payload_passes_through_without_store() {
         Some(12),
     ));
 
-    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
-        Ok(output)
-    }))
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move { Ok(output) },
+    ))
     .expect("run");
 
     let attachment = result.attachments.first().expect("attachment");

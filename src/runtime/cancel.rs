@@ -30,7 +30,6 @@ impl CancellationToken {
     }
 
     pub fn abort_reason(&self) -> String {
-        self.reason()
-            .unwrap_or_else(|| "cancelled".to_string())
+        self.reason().unwrap_or_else(|| "cancelled".to_string())
     }
 }

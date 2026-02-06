@@ -1,12 +1,12 @@
-﻿//! Ablation Study API for analyzing node contributions
+//! Ablation Study API for analyzing node contributions
 //!
 //! Provides tools for systematically evaluating the impact of individual
 //! nodes by masking (disabling) them and comparing results.
 
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use serde::{Serialize, Deserialize};
 
 use crate::runtime::metrics::{AggregateStats, MetricsCollector};
 
@@ -197,10 +197,7 @@ pub enum NodeRecommendation {
 
 impl AblationReport {
     /// Create a report from collected metrics
-    pub fn from_metrics(
-        collector: &MetricsCollector,
-        configs: &[AblationConfig],
-    ) -> Self {
+    pub fn from_metrics(collector: &MetricsCollector, configs: &[AblationConfig]) -> Self {
         let mut config_results = Vec::new();
         let mut baseline_stats: Option<AggregateStats> = None;
 
@@ -218,7 +215,8 @@ impl AblationReport {
 
         // Generate comparisons
         let comparisons = if let Some(ref baseline) = baseline_stats {
-            config_results.iter()
+            config_results
+                .iter()
                 .filter(|r| !r.config.is_baseline)
                 .map(|r| Self::compare_to_baseline(&r.stats, baseline, &r.config.name))
                 .collect()
@@ -244,7 +242,11 @@ impl AblationReport {
         }
     }
 
-    fn compare_to_baseline(stats: &AggregateStats, baseline: &AggregateStats, name: &str) -> ConfigComparison {
+    fn compare_to_baseline(
+        stats: &AggregateStats,
+        baseline: &AggregateStats,
+        name: &str,
+    ) -> ConfigComparison {
         let latency_delta_pct = if baseline.avg_latency_ms > 0.0 {
             ((stats.avg_latency_ms - baseline.avg_latency_ms) / baseline.avg_latency_ms) * 100.0
         } else {
@@ -295,15 +297,17 @@ impl AblationReport {
 
         for (node_name, node_stats) in &baseline.node_stats {
             // Find the config where this node was masked
-            let masked_result = results.iter()
+            let masked_result = results
+                .iter()
                 .find(|r| r.config.masked_nodes.contains(node_name));
 
             let (success_impact, quality_impact) = if let Some(masked) = masked_result {
                 let success_impact = baseline.success_rate - masked.stats.success_rate;
-                let quality_impact = match (baseline.avg_quality_score, masked.stats.avg_quality_score) {
-                    (Some(b), Some(m)) => Some(b - m),
-                    _ => None,
-                };
+                let quality_impact =
+                    match (baseline.avg_quality_score, masked.stats.avg_quality_score) {
+                        (Some(b), Some(m)) => Some(b - m),
+                        _ => None,
+                    };
                 (success_impact, quality_impact)
             } else {
                 (0.0, None)
@@ -325,8 +329,8 @@ impl AblationReport {
             // Calculate importance score
             // High importance = high impact on success/quality when removed
             // Low importance = low impact but high cost
-            let importance = (success_impact.abs() * 2.0 + quality_impact.unwrap_or(0.0).abs())
-                .min(1.0);
+            let importance =
+                (success_impact.abs() * 2.0 + quality_impact.unwrap_or(0.0).abs()).min(1.0);
 
             // Generate recommendation
             let recommendation = Self::recommend_for_node(
@@ -394,9 +398,14 @@ impl AblationReport {
         let mut recs = Vec::new();
 
         // Find best optimization opportunity
-        if let Some(best) = comparisons.iter()
+        if let Some(best) = comparisons
+            .iter()
             .filter(|c| c.success_rate_delta > -0.05)
-            .min_by(|a, b| a.latency_delta_pct.partial_cmp(&b.latency_delta_pct).unwrap())
+            .min_by(|a, b| {
+                a.latency_delta_pct
+                    .partial_cmp(&b.latency_delta_pct)
+                    .unwrap()
+            })
         {
             if best.latency_delta_pct < -15.0 {
                 recs.push(format!(
@@ -407,15 +416,22 @@ impl AblationReport {
         }
 
         // Nodes to optimize
-        for contrib in contributions.iter().filter(|c| c.recommendation == NodeRecommendation::Optimize) {
+        for contrib in contributions
+            .iter()
+            .filter(|c| c.recommendation == NodeRecommendation::Optimize)
+        {
             recs.push(format!(
                 "⚡ Node '{}' uses {:.1}% of resources but is critical - consider optimizing",
-                contrib.node, contrib.latency_contribution_pct + contrib.token_contribution_pct
+                contrib.node,
+                contrib.latency_contribution_pct + contrib.token_contribution_pct
             ));
         }
 
         // Nodes to consider removing
-        for contrib in contributions.iter().filter(|c| c.recommendation == NodeRecommendation::ConsiderRemoving) {
+        for contrib in contributions
+            .iter()
+            .filter(|c| c.recommendation == NodeRecommendation::ConsiderRemoving)
+        {
             recs.push(format!(
                 "🗑️ Node '{}' uses {:.1}% of resources with low impact ({:.1}% success rate change)",
                 contrib.node,
@@ -425,7 +441,8 @@ impl AblationReport {
         }
 
         // Nodes to simplify
-        let simplify_count = contributions.iter()
+        let simplify_count = contributions
+            .iter()
             .filter(|c| c.recommendation == NodeRecommendation::Simplify)
             .count();
         if simplify_count > 0 {
@@ -539,10 +556,8 @@ impl AblationStudyBuilder {
     /// Add configurations to mask each node individually
     pub fn mask_each(mut self, nodes: Vec<&str>) -> Self {
         for node in nodes {
-            self.configs.push(AblationConfig::mask_one(
-                format!("without_{}", node),
-                node,
-            ));
+            self.configs
+                .push(AblationConfig::mask_one(format!("without_{}", node), node));
         }
         self
     }
@@ -634,9 +649,9 @@ mod tests {
         };
 
         let comparison = AblationReport::compare_to_baseline(&masked, &baseline, "no_planner");
-        
+
         assert!(comparison.latency_delta_pct < 0.0); // Faster
-        assert!(comparison.token_delta_pct < 0.0);   // Fewer tokens
+        assert!(comparison.token_delta_pct < 0.0); // Fewer tokens
         assert!(comparison.success_rate_delta < 0.0); // Lower success
     }
 }
