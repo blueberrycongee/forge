@@ -13,6 +13,12 @@ use crate::runtime::executor::Checkpoint;
 use crate::runtime::tool::{AttachmentStore, ToolAttachment};
 use crate::runtime::trace::ExecutionTrace;
 
+const CHECKPOINT_RECORD_VERSION: u32 = 1;
+
+fn default_checkpoint_record_version() -> u32 {
+    CHECKPOINT_RECORD_VERSION
+}
+
 /// Minimal message payload for snapshots.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionMessage {
@@ -89,6 +95,8 @@ impl SessionSnapshot {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CheckpointRecord {
+    #[serde(default = "default_checkpoint_record_version")]
+    pub version: u32,
     pub run_id: String,
     pub checkpoint_id: String,
     pub created_at: String,
@@ -110,6 +118,7 @@ impl CheckpointRecord {
         resume_values: HashMap<String, serde_json::Value>,
     ) -> Self {
         Self {
+            version: CHECKPOINT_RECORD_VERSION,
             run_id: run_id.into(),
             checkpoint_id: checkpoint_id.into(),
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -128,6 +137,7 @@ impl CheckpointRecord {
     ) -> Result<Self, serde_json::Error> {
         let state = serde_json::to_value(&checkpoint.state)?;
         Ok(Self {
+            version: CHECKPOINT_RECORD_VERSION,
             run_id: run_id.into(),
             checkpoint_id: checkpoint_id.into(),
             created_at: checkpoint.created_at.clone(),
@@ -142,6 +152,12 @@ impl CheckpointRecord {
     pub fn to_checkpoint<S: for<'de> Deserialize<'de>>(
         &self,
     ) -> Result<Checkpoint<S>, serde_json::Error> {
+        if self.version != CHECKPOINT_RECORD_VERSION {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("unsupported checkpoint record version: {}", self.version),
+            )));
+        }
         let state = serde_json::from_value(self.state.clone())?;
         Ok(Checkpoint {
             run_id: self.run_id.clone(),
@@ -592,6 +608,7 @@ mod tests {
         assert!(ids.contains(&"cp-2".to_string()));
 
         let loaded = store.load("run-1", "cp-1").expect("load");
+        assert_eq!(loaded.version, 1);
         assert_eq!(loaded.next_node, "node-a");
 
         let latest = store
@@ -600,6 +617,23 @@ mod tests {
             .expect("latest exists");
         assert_eq!(latest.checkpoint_id, "cp-2");
         assert_eq!(latest.next_node, "node-b");
+    }
+
+    #[test]
+    fn checkpoint_record_defaults_version_when_missing() {
+        let payload = serde_json::json!({
+            "run_id": "run-1",
+            "checkpoint_id": "cp-1",
+            "created_at": "2026-02-06T00:00:00Z",
+            "state": { "step": 1 },
+            "next_node": "review",
+            "iterations": 3,
+            "pending_interrupts": [],
+            "resume_values": {}
+        });
+        let record: CheckpointRecord =
+            serde_json::from_value(payload).expect("decode checkpoint record");
+        assert_eq!(record.version, 1);
     }
 
     #[test]
