@@ -308,6 +308,21 @@ impl CheckpointStore {
         Ok(record)
     }
 
+    pub fn load_latest(&self, run_id: &str) -> std::io::Result<Option<CheckpointRecord>> {
+        let mut latest: Option<CheckpointRecord> = None;
+        for checkpoint_id in self.list(run_id)? {
+            let record = self.load(run_id, &checkpoint_id)?;
+            let is_newer = latest
+                .as_ref()
+                .map(|current| record.created_at > current.created_at)
+                .unwrap_or(true);
+            if is_newer {
+                latest = Some(record);
+            }
+        }
+        Ok(latest)
+    }
+
     pub fn list(&self, run_id: &str) -> std::io::Result<Vec<String>> {
         let dir = self.checkpoint_dir(run_id);
         if !dir.exists() {
@@ -448,12 +463,15 @@ impl AttachmentResolver {
 #[cfg(test)]
 mod tests {
     use super::{
-        AttachmentResolver, SessionMessage, SessionSnapshot, SessionSnapshotIo, SessionStore,
+        AttachmentResolver, CheckpointRecord, CheckpointStore, SessionMessage, SessionSnapshot,
+        SessionSnapshotIo, SessionStore,
     };
     use crate::runtime::compaction::CompactionResult;
+    use crate::runtime::error::Interrupt;
     use crate::runtime::message::{Message, MessageRole, Part};
     use crate::runtime::tool::{AttachmentStore, ToolAttachment, ToolOutput};
     use crate::runtime::trace::{ExecutionTrace, TraceEvent};
+    use std::collections::HashMap;
 
     #[test]
     fn session_snapshot_roundtrip() {
@@ -536,6 +554,52 @@ mod tests {
                 text: "hello".to_string()
             }]
         );
+    }
+
+    #[test]
+    fn checkpoint_store_roundtrip_and_latest() {
+        let temp = std::env::temp_dir().join(format!("forge-checkpoint-{}", uuid::Uuid::new_v4()));
+        let store = CheckpointStore::new(temp);
+
+        let mut first = CheckpointRecord::new(
+            "run-1",
+            "cp-1",
+            serde_json::json!({ "count": 1 }),
+            "node-a",
+            1,
+            vec![Interrupt::new("pause", "node-a")],
+            HashMap::new(),
+        );
+        first.created_at = "2026-01-01T00:00:00Z".to_string();
+
+        let mut second = CheckpointRecord::new(
+            "run-1",
+            "cp-2",
+            serde_json::json!({ "count": 2 }),
+            "node-b",
+            2,
+            Vec::new(),
+            HashMap::new(),
+        );
+        second.created_at = "2026-01-01T00:00:01Z".to_string();
+
+        store.save(&first).expect("save first");
+        store.save(&second).expect("save second");
+
+        let ids = store.list("run-1").expect("list");
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"cp-1".to_string()));
+        assert!(ids.contains(&"cp-2".to_string()));
+
+        let loaded = store.load("run-1", "cp-1").expect("load");
+        assert_eq!(loaded.next_node, "node-a");
+
+        let latest = store
+            .load_latest("run-1")
+            .expect("load latest")
+            .expect("latest exists");
+        assert_eq!(latest.checkpoint_id, "cp-2");
+        assert_eq!(latest.next_node, "node-b");
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //! - Node masking for ablation studies
 //! - Metrics collection for performance analysis
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -26,12 +27,21 @@ use crate::runtime::metrics::{MetricsCollector, RunMetrics, RunMetricsBuilder};
 use crate::runtime::node::{Node, NodeSpec};
 use crate::runtime::permission::{PermissionDecision, PermissionGate, PermissionRequest};
 use crate::runtime::prune::{prune_tool_events, PrunePolicy};
-use crate::runtime::session::SessionSnapshot;
+use crate::runtime::session::{CheckpointRecord, CheckpointStore, SessionSnapshot};
 use crate::runtime::state::GraphState;
 use crate::runtime::tool::{
     AttachmentPolicy, AttachmentStore, ToolCall, ToolContext, ToolOutput, ToolRegistry,
 };
 use crate::runtime::trace::{ExecutionTrace, TraceEvent};
+
+/// Durability mode for checkpoint persistence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum CheckpointDurability {
+    /// Persist checkpoints immediately when they are created.
+    Sync,
+    /// Defer checkpoint persistence until the run exits this invocation.
+    Exit,
+}
 
 /// Configuration for graph execution
 #[derive(Clone)]
@@ -70,6 +80,10 @@ pub struct ExecutionConfig {
     pub trace: Option<Arc<std::sync::Mutex<ExecutionTrace>>>,
     /// Optional session snapshot collector
     pub session_snapshot: Option<Arc<std::sync::Mutex<SessionSnapshot>>>,
+    /// Optional persistent checkpoint store for resumable execution.
+    pub checkpoint_store: Option<Arc<CheckpointStore>>,
+    /// Persistence durability mode when checkpoint_store is configured.
+    pub checkpoint_durability: CheckpointDurability,
 }
 
 impl ExecutionConfig {
@@ -92,6 +106,8 @@ impl ExecutionConfig {
             attachment_policy: AttachmentPolicy::default(),
             trace: None,
             session_snapshot: None,
+            checkpoint_store: None,
+            checkpoint_durability: CheckpointDurability::Sync,
         }
     }
 
@@ -115,6 +131,8 @@ impl ExecutionConfig {
             attachment_policy: AttachmentPolicy::default(),
             trace: None,
             session_snapshot: None,
+            checkpoint_store: None,
+            checkpoint_durability: CheckpointDurability::Sync,
         }
     }
 
@@ -204,6 +222,18 @@ impl ExecutionConfig {
         snapshot: Arc<std::sync::Mutex<SessionSnapshot>>,
     ) -> Self {
         self.session_snapshot = Some(snapshot);
+        self
+    }
+
+    /// Attach persistent checkpoint store for resumable runs.
+    pub fn with_checkpoint_store(mut self, store: Arc<CheckpointStore>) -> Self {
+        self.checkpoint_store = Some(store);
+        self
+    }
+
+    /// Configure checkpoint persistence durability.
+    pub fn with_checkpoint_durability(mut self, durability: CheckpointDurability) -> Self {
+        self.checkpoint_durability = durability;
         self
     }
 
@@ -711,7 +741,10 @@ impl<S: GraphState> CompiledGraph<S> {
     }
 
     /// Execute graph with interrupt/resume support
-    pub async fn invoke_resumable(&self, initial_state: S) -> GraphResult<ExecutionResult<S>> {
+    pub async fn invoke_resumable(&self, initial_state: S) -> GraphResult<ExecutionResult<S>>
+    where
+        S: Serialize,
+    {
         let run_id = uuid::Uuid::new_v4().to_string();
         self.emit_run_event(Event::RunStarted {
             run_id: run_id.clone(),
@@ -760,19 +793,223 @@ impl<S: GraphState> CompiledGraph<S> {
         &self,
         checkpoint: Checkpoint<S>,
         command: ResumeCommand,
-    ) -> GraphResult<ExecutionResult<S>> {
-        let mut resume_values = checkpoint.resume_values;
-        let resume_value = command.value.clone();
+    ) -> GraphResult<ExecutionResult<S>>
+    where
+        S: Serialize,
+    {
+        self.resume_from_checkpoint(checkpoint, Some(command)).await
+    }
 
-        // Add new resume value
-        if let Some(interrupt_id) = command.interrupt_id {
-            resume_values.insert(interrupt_id, resume_value.clone());
-        }
-        if let Some(interrupt) = checkpoint.pending_interrupts.first() {
-            resume_values.insert(interrupt.id.clone(), resume_value.clone());
-            resume_values.insert(interrupt.node.clone(), resume_value);
+    /// Resume from a persisted checkpoint in the configured checkpoint store.
+    pub async fn resume_from_store(
+        &self,
+        run_id: &str,
+        checkpoint_id: &str,
+        command: Option<ResumeCommand>,
+    ) -> GraphResult<ExecutionResult<S>>
+    where
+        S: Serialize + DeserializeOwned,
+    {
+        let checkpoint = self.load_checkpoint_from_store(run_id, checkpoint_id)?;
+        self.resume_from_checkpoint(checkpoint, command).await
+    }
+
+    /// Resume from the latest persisted checkpoint in the configured checkpoint store.
+    pub async fn resume_latest_from_store(
+        &self,
+        run_id: &str,
+        command: Option<ResumeCommand>,
+    ) -> GraphResult<ExecutionResult<S>>
+    where
+        S: Serialize + DeserializeOwned,
+    {
+        let store =
+            self.config
+                .checkpoint_store
+                .as_ref()
+                .ok_or_else(|| GraphError::CheckpointError {
+                    run_id: run_id.to_string(),
+                    message: "checkpoint store is not configured".to_string(),
+                })?;
+        let record = store
+            .load_latest(run_id)
+            .map_err(|err| GraphError::CheckpointError {
+                run_id: run_id.to_string(),
+                message: err.to_string(),
+            })?
+            .ok_or_else(|| GraphError::CheckpointError {
+                run_id: run_id.to_string(),
+                message: "no persisted checkpoints found".to_string(),
+            })?;
+        let checkpoint =
+            record
+                .to_checkpoint::<S>()
+                .map_err(|err| GraphError::CheckpointError {
+                    run_id: run_id.to_string(),
+                    message: err.to_string(),
+                })?;
+        self.resume_from_checkpoint(checkpoint, command).await
+    }
+
+    /// Load a checkpoint from the configured checkpoint store.
+    pub fn load_checkpoint_from_store(
+        &self,
+        run_id: &str,
+        checkpoint_id: &str,
+    ) -> GraphResult<Checkpoint<S>>
+    where
+        S: DeserializeOwned,
+    {
+        let store =
+            self.config
+                .checkpoint_store
+                .as_ref()
+                .ok_or_else(|| GraphError::CheckpointError {
+                    run_id: run_id.to_string(),
+                    message: "checkpoint store is not configured".to_string(),
+                })?;
+        let record =
+            store
+                .load(run_id, checkpoint_id)
+                .map_err(|err| GraphError::CheckpointError {
+                    run_id: run_id.to_string(),
+                    message: err.to_string(),
+                })?;
+        record
+            .to_checkpoint::<S>()
+            .map_err(|err| GraphError::CheckpointError {
+                run_id: run_id.to_string(),
+                message: err.to_string(),
+            })
+    }
+
+    /// Internal execution with checkpoint support
+    async fn run_with_checkpoint(
+        &self,
+        run_id: String,
+        initial_state: S,
+        start_node: String,
+        start_iterations: usize,
+        resume_values: HashMap<String, serde_json::Value>,
+    ) -> GraphResult<ExecutionResult<S>>
+    where
+        S: Serialize,
+    {
+        let mut state = initial_state;
+        let mut current_node = if start_node == START {
+            self.get_next_node(START, &state)?
+        } else {
+            start_node
+        };
+        let mut iterations = start_iterations;
+        let mut deferred_checkpoint: Option<Checkpoint<S>> = None;
+
+        while current_node != END && iterations < self.config.max_iterations {
+            iterations += 1;
+
+            if self.config.debug {
+                println!(
+                    "[Forge] Executing node: {} (iteration {})",
+                    current_node, iterations
+                );
+            }
+
+            // Check if masked
+            if self.config.is_masked(&current_node) {
+                if self.config.debug {
+                    println!("[Forge] Skipping masked node: {}", current_node);
+                }
+                current_node = self.get_next_node(&current_node, &state)?;
+                let checkpoint = self.build_checkpoint(
+                    &run_id,
+                    &state,
+                    &current_node,
+                    Vec::new(),
+                    iterations,
+                    &resume_values,
+                );
+                self.maybe_persist_checkpoint(&checkpoint, &mut deferred_checkpoint)?;
+                continue;
+            }
+
+            // Check if we have a resume value for this node
+            let has_resume = resume_values.contains_key(&current_node);
+            if let Some(value) = resume_values.get(&current_node) {
+                state.set(&format!("resume:{}", current_node), Box::new(value.clone()));
+            }
+
+            // Execute the node
+            let node = self
+                .nodes
+                .get(&current_node)
+                .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
+
+            match node.execute(state.clone()).await {
+                Ok(new_state) => {
+                    state = new_state;
+                }
+                Err(GraphError::Interrupted(interrupts)) => {
+                    if has_resume && self.config.debug {
+                        println!("[Forge] Resuming from interrupt at node: {}", current_node);
+                    }
+                    // Node still interrupted after this execution attempt.
+                    // Return a fresh checkpoint so callers can provide another resume value.
+                    let checkpoint = self.build_checkpoint(
+                        &run_id,
+                        &state,
+                        &current_node,
+                        interrupts.clone(),
+                        iterations,
+                        &resume_values,
+                    );
+                    self.maybe_persist_checkpoint(&checkpoint, &mut deferred_checkpoint)?;
+                    self.flush_deferred_checkpoint(&mut deferred_checkpoint)?;
+                    return Ok(ExecutionResult::Interrupted {
+                        checkpoint,
+                        interrupts,
+                    });
+                }
+                Err(e) => {
+                    self.flush_deferred_checkpoint(&mut deferred_checkpoint)?;
+                    return Err(e);
+                }
+            }
+
+            // Determine next node
+            current_node = self.get_next_node(&current_node, &state)?;
+            let checkpoint = self.build_checkpoint(
+                &run_id,
+                &state,
+                &current_node,
+                Vec::new(),
+                iterations,
+                &resume_values,
+            );
+            self.maybe_persist_checkpoint(&checkpoint, &mut deferred_checkpoint)?;
         }
 
+        if iterations >= self.config.max_iterations {
+            self.flush_deferred_checkpoint(&mut deferred_checkpoint)?;
+            return Err(GraphError::MaxIterationsExceeded);
+        }
+
+        let checkpoint =
+            self.build_checkpoint(&run_id, &state, END, Vec::new(), iterations, &resume_values);
+        self.maybe_persist_checkpoint(&checkpoint, &mut deferred_checkpoint)?;
+        self.flush_deferred_checkpoint(&mut deferred_checkpoint)?;
+
+        Ok(ExecutionResult::Complete(state))
+    }
+
+    async fn resume_from_checkpoint(
+        &self,
+        checkpoint: Checkpoint<S>,
+        command: Option<ResumeCommand>,
+    ) -> GraphResult<ExecutionResult<S>>
+    where
+        S: Serialize,
+    {
+        let resume_values = self.apply_resume_command(&checkpoint, command)?;
         let run_id = checkpoint.run_id.clone();
         self.emit_run_event(Event::RunResumed {
             run_id: run_id.clone(),
@@ -816,90 +1053,109 @@ impl<S: GraphState> CompiledGraph<S> {
         result
     }
 
-    /// Internal execution with checkpoint support
-    async fn run_with_checkpoint(
+    fn apply_resume_command(
         &self,
-        run_id: String,
-        initial_state: S,
-        start_node: String,
-        start_iterations: usize,
-        resume_values: HashMap<String, serde_json::Value>,
-    ) -> GraphResult<ExecutionResult<S>> {
-        let mut state = initial_state;
-        let mut current_node = if start_node == START {
-            self.get_next_node(START, &state)?
-        } else {
-            start_node
+        checkpoint: &Checkpoint<S>,
+        command: Option<ResumeCommand>,
+    ) -> GraphResult<HashMap<String, serde_json::Value>> {
+        let mut resume_values = checkpoint.resume_values.clone();
+        if checkpoint.pending_interrupts.is_empty() {
+            return Ok(resume_values);
+        }
+
+        let command = command.ok_or_else(|| GraphError::CheckpointError {
+            run_id: checkpoint.run_id.clone(),
+            message: "resume command is required for pending interrupts".to_string(),
+        })?;
+        let resume_value = command.value.clone();
+
+        if let Some(interrupt_id) = command.interrupt_id {
+            resume_values.insert(interrupt_id, resume_value.clone());
+        }
+        if let Some(interrupt) = checkpoint.pending_interrupts.first() {
+            resume_values.insert(interrupt.id.clone(), resume_value.clone());
+            resume_values.insert(interrupt.node.clone(), resume_value);
+        }
+
+        Ok(resume_values)
+    }
+
+    fn build_checkpoint(
+        &self,
+        run_id: &str,
+        state: &S,
+        next_node: impl Into<String>,
+        pending_interrupts: Vec<Interrupt>,
+        iterations: usize,
+        resume_values: &HashMap<String, serde_json::Value>,
+    ) -> Checkpoint<S> {
+        Checkpoint {
+            run_id: run_id.to_string(),
+            checkpoint_id: uuid::Uuid::new_v4().to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            state: state.clone(),
+            next_node: next_node.into(),
+            pending_interrupts,
+            iterations,
+            resume_values: resume_values.clone(),
+        }
+    }
+
+    fn maybe_persist_checkpoint(
+        &self,
+        checkpoint: &Checkpoint<S>,
+        deferred: &mut Option<Checkpoint<S>>,
+    ) -> GraphResult<()>
+    where
+        S: Serialize,
+    {
+        if self.config.checkpoint_store.is_none() {
+            return Ok(());
+        }
+
+        match self.config.checkpoint_durability {
+            CheckpointDurability::Sync => self.persist_checkpoint(checkpoint),
+            CheckpointDurability::Exit => {
+                *deferred = Some(checkpoint.clone());
+                Ok(())
+            }
+        }
+    }
+
+    fn flush_deferred_checkpoint(&self, deferred: &mut Option<Checkpoint<S>>) -> GraphResult<()>
+    where
+        S: Serialize,
+    {
+        if let Some(checkpoint) = deferred.take() {
+            self.persist_checkpoint(&checkpoint)?;
+        }
+        Ok(())
+    }
+
+    fn persist_checkpoint(&self, checkpoint: &Checkpoint<S>) -> GraphResult<()>
+    where
+        S: Serialize,
+    {
+        let Some(store) = &self.config.checkpoint_store else {
+            return Ok(());
         };
-        let mut iterations = start_iterations;
 
-        while current_node != END && iterations < self.config.max_iterations {
-            iterations += 1;
-
-            if self.config.debug {
-                println!(
-                    "[Forge] Executing node: {} (iteration {})",
-                    current_node, iterations
-                );
-            }
-
-            // Check if masked
-            if self.config.is_masked(&current_node) {
-                if self.config.debug {
-                    println!("[Forge] Skipping masked node: {}", current_node);
-                }
-                current_node = self.get_next_node(&current_node, &state)?;
-                continue;
-            }
-
-            // Check if we have a resume value for this node
-            let has_resume = resume_values.contains_key(&current_node);
-            if let Some(value) = resume_values.get(&current_node) {
-                state.set(&format!("resume:{}", current_node), Box::new(value.clone()));
-            }
-
-            // Execute the node
-            let node = self
-                .nodes
-                .get(&current_node)
-                .ok_or_else(|| GraphError::NodeNotFound(current_node.clone()))?;
-
-            match node.execute(state.clone()).await {
-                Ok(new_state) => {
-                    state = new_state;
-                }
-                Err(GraphError::Interrupted(interrupts)) => {
-                    if has_resume && self.config.debug {
-                        println!("[Forge] Resuming from interrupt at node: {}", current_node);
-                    }
-                    // Node still interrupted after this execution attempt.
-                    // Return a fresh checkpoint so callers can provide another resume value.
-                    return Ok(ExecutionResult::Interrupted {
-                        checkpoint: Checkpoint {
-                            run_id: run_id.clone(),
-                            checkpoint_id: uuid::Uuid::new_v4().to_string(),
-                            created_at: chrono::Utc::now().to_rfc3339(),
-                            state,
-                            next_node: current_node,
-                            pending_interrupts: interrupts.clone(),
-                            iterations,
-                            resume_values,
-                        },
-                        interrupts,
-                    });
-                }
-                Err(e) => return Err(e),
-            }
-
-            // Determine next node
-            current_node = self.get_next_node(&current_node, &state)?;
-        }
-
-        if iterations >= self.config.max_iterations {
-            return Err(GraphError::MaxIterationsExceeded);
-        }
-
-        Ok(ExecutionResult::Complete(state))
+        let record = CheckpointRecord::from_checkpoint(
+            checkpoint.run_id.clone(),
+            checkpoint.checkpoint_id.clone(),
+            checkpoint,
+        )
+        .map_err(|err| GraphError::CheckpointError {
+            run_id: checkpoint.run_id.clone(),
+            message: err.to_string(),
+        })?;
+        store
+            .save(&record)
+            .map_err(|err| GraphError::CheckpointError {
+                run_id: checkpoint.run_id.clone(),
+                message: err.to_string(),
+            })?;
+        Ok(())
     }
 
     // ============ Ablation Study Methods ============

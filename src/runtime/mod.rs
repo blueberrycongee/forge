@@ -113,7 +113,7 @@ pub mod prelude {
         Event, EventMeta, EventRecord, EventRecordSink, EventSequencer, EventSink,
         NoopEventRecordSink, NoopEventSink, PermissionReply, TokenUsage, ToolUpdate,
     };
-    pub use crate::runtime::executor::CompiledGraph;
+    pub use crate::runtime::executor::{CheckpointDurability, CompiledGraph};
     pub use crate::runtime::graph::StateGraph;
     pub use crate::runtime::message::{Message, MessageRole, Part};
     pub use crate::runtime::output::{
@@ -131,7 +131,8 @@ pub mod prelude {
     pub use crate::runtime::prune::{PrunePolicy, PruneResult};
     pub use crate::runtime::r#loop::{LoopContext, LoopNode};
     pub use crate::runtime::session::{
-        AttachmentResolver, SessionMessage, SessionSnapshot, SessionSnapshotIo,
+        AttachmentResolver, CheckpointRecord, CheckpointStore, SessionMessage, SessionSnapshot,
+        SessionSnapshotIo,
     };
     pub use crate::runtime::session_state::{
         RunMetadata, RunStatus, SessionPhase, SessionRouting, SessionState, ToolCallRecord,

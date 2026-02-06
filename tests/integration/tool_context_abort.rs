@@ -11,8 +11,9 @@ use forge::runtime::prelude::LoopNode;
 use forge::runtime::state::GraphState;
 use forge::runtime::tool::{ToolCall, ToolRegistry};
 use futures::executor::block_on;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct AbortState {
     steps: usize,
 }

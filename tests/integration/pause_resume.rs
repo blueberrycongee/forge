@@ -4,12 +4,14 @@ use std::sync::{Arc, Mutex};
 use forge::runtime::constants::{END, START};
 use forge::runtime::error::{interrupt, GraphError, ResumeCommand};
 use forge::runtime::event::{Event, EventSink};
-use forge::runtime::executor::{ExecutionConfig, ExecutionResult};
+use forge::runtime::executor::{CheckpointDurability, ExecutionConfig, ExecutionResult};
 use forge::runtime::graph::StateGraph;
+use forge::runtime::session::CheckpointStore;
 use forge::runtime::state::GraphState;
 use futures::executor::block_on;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct PauseState {
     steps: usize,
     resume: Option<serde_json::Value>,
@@ -55,7 +57,7 @@ impl EventSink for CaptureSink {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct MultiPauseState {
     steps: usize,
     first_resume: Option<serde_json::Value>,
@@ -283,4 +285,54 @@ fn pause_resume_allows_reusing_same_checkpoint_deterministically() {
 
     assert_eq!(first_state.steps, 1);
     assert_eq!(second_state.steps, 1);
+}
+
+#[test]
+fn pause_resume_can_continue_from_persisted_checkpoint_after_restart() {
+    let build_graph = || {
+        let mut graph = StateGraph::<PauseState>::new();
+        graph.add_node("pause", pause_node);
+        graph.add_node("finish", finish_node);
+        graph.add_edge(START, "pause");
+        graph.add_edge("pause", "finish");
+        graph.add_edge("finish", END);
+        graph
+    };
+
+    let store_root =
+        std::env::temp_dir().join(format!("forge-checkpoint-resume-{}", uuid::Uuid::new_v4()));
+    let store = Arc::new(CheckpointStore::new(store_root));
+    let config = ExecutionConfig::new()
+        .with_checkpoint_store(Arc::clone(&store))
+        .with_checkpoint_durability(CheckpointDurability::Sync);
+
+    let compiled_1 = build_graph()
+        .compile()
+        .expect("compile")
+        .with_config(config.clone());
+    let first = block_on(compiled_1.invoke_resumable(PauseState::default())).expect("run");
+    let checkpoint = match first {
+        ExecutionResult::Interrupted { checkpoint, .. } => checkpoint,
+        _ => panic!("expected interrupt"),
+    };
+
+    let checkpoints = store.list(&checkpoint.run_id).expect("list checkpoints");
+    assert!(checkpoints.contains(&checkpoint.checkpoint_id));
+
+    let compiled_2 = build_graph()
+        .compile()
+        .expect("compile")
+        .with_config(config);
+    let resumed = block_on(compiled_2.resume_from_store(
+        &checkpoint.run_id,
+        &checkpoint.checkpoint_id,
+        Some(ResumeCommand::new("continue")),
+    ))
+    .expect("resume from store");
+
+    let final_state = match resumed {
+        ExecutionResult::Complete(state) => state,
+        _ => panic!("expected completion"),
+    };
+    assert_eq!(final_state.steps, 1);
 }

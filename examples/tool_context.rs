@@ -15,8 +15,9 @@ use forge::runtime::tool::{
     ToolRegistry,
 };
 use futures::executor::block_on;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct ContextState {
     logs: Vec<String>,
     abort: bool,
