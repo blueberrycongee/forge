@@ -53,7 +53,7 @@ pub fn truncate_text(text: &str, options: TruncationOptions) -> TruncationResult
 
     let max_lines = options.max_lines.unwrap_or(usize::MAX);
     let max_bytes = options.max_bytes.unwrap_or(usize::MAX);
-    let total_bytes = text.as_bytes().len();
+    let total_bytes = text.len();
     let lines: Vec<&str> = if text.is_empty() {
         Vec::new()
     } else {
@@ -75,7 +75,7 @@ pub fn truncate_text(text: &str, options: TruncationOptions) -> TruncationResult
                 if out.len() >= max_lines {
                     break;
                 }
-                let size = line.as_bytes().len() + if out.is_empty() { 0 } else { 1 };
+                let size = line.len() + if out.is_empty() { 0 } else { 1 };
                 if bytes + size > max_bytes {
                     hit_bytes = true;
                     break;
@@ -89,7 +89,7 @@ pub fn truncate_text(text: &str, options: TruncationOptions) -> TruncationResult
                 if out.len() >= max_lines {
                     break;
                 }
-                let size = line.as_bytes().len() + if out.is_empty() { 0 } else { 1 };
+                let size = line.len() + if out.is_empty() { 0 } else { 1 };
                 if bytes + size > max_bytes {
                     hit_bytes = true;
                     break;

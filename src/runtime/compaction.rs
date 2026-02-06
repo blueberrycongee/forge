@@ -1,7 +1,7 @@
-﻿//! Compaction policy and result types.
+//! Compaction policy and result types.
 
 /// Compaction trigger policy.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct CompactionPolicy {
     /// Trigger based on message count.
     pub max_messages: Option<usize>,
@@ -13,18 +13,6 @@ pub struct CompactionPolicy {
     pub context_window: Option<u64>,
     /// Whether compaction is enabled.
     pub enabled: bool,
-}
-
-impl Default for CompactionPolicy {
-    fn default() -> Self {
-        Self {
-            max_messages: None,
-            max_tokens: None,
-            token_ratio: None,
-            context_window: None,
-            enabled: false,
-        }
-    }
 }
 
 impl CompactionPolicy {
@@ -95,7 +83,9 @@ impl CompactionPolicy {
     }
 
     pub fn requires_token_usage(&self) -> bool {
-        self.enabled && (self.max_tokens.is_some() || (self.token_ratio.is_some() && self.context_window.is_some()))
+        self.enabled
+            && (self.max_tokens.is_some()
+                || (self.token_ratio.is_some() && self.context_window.is_some()))
     }
 
     pub fn resolve_token_threshold(&self) -> Option<u64> {
@@ -166,11 +156,7 @@ impl CompactionHook for NoopCompactionHook {}
 #[cfg(test)]
 mod tests {
     use super::{
-        CompactionContext,
-        CompactionHook,
-        CompactionPolicy,
-        CompactionResult,
-        NoopCompactionHook,
+        CompactionContext, CompactionHook, CompactionPolicy, CompactionResult, NoopCompactionHook,
     };
 
     #[test]
@@ -204,8 +190,7 @@ mod tests {
 
     #[test]
     fn compaction_context_holds_prompt_hint() {
-        let context = CompactionContext::new(vec!["m1".to_string()])
-            .with_prompt_hint("focus");
+        let context = CompactionContext::new(vec!["m1".to_string()]).with_prompt_hint("focus");
         assert_eq!(context.prompt_hint.as_deref(), Some("focus"));
     }
 }

@@ -957,7 +957,7 @@ impl<S: GraphState> CompiledGraph<S> {
             .trace
             .as_ref()
             .map(|trace| trace.lock().unwrap().clone())
-            .unwrap_or_else(ExecutionTrace::new);
+            .unwrap_or_default();
         let messages = self
             .config
             .session_snapshot
@@ -1081,6 +1081,15 @@ impl<S: GraphState> Clone for CompiledGraph<S> {
             metrics_collector: self.metrics_collector.clone(),
         }
     }
+}
+
+fn resolve_session_id<S: GraphState>(state: &S) -> String {
+    if let Some(value) = state.get("session_id") {
+        if let Some(id) = value.downcast_ref::<String>() {
+            return id.clone();
+        }
+    }
+    "unknown".to_string()
 }
 
 #[cfg(test)]
@@ -1524,13 +1533,4 @@ mod tests {
         assert!(!snapshot.messages.is_empty());
         assert!(snapshot.compactions.is_empty());
     }
-}
-
-fn resolve_session_id<S: GraphState>(state: &S) -> String {
-    if let Some(value) = state.get("session_id") {
-        if let Some(id) = value.downcast_ref::<String>() {
-            return id.clone();
-        }
-    }
-    "unknown".to_string()
 }

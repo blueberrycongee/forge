@@ -1,4 +1,4 @@
-﻿use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -156,7 +156,7 @@ fn handle_write(root: &Path, call: ToolCall) -> GraphResult<ToolOutput> {
         .map_err(|err| tool_error("write", format!("write failed: {}", err)))?;
     Ok(ToolOutput::new(serde_json::json!({
         "path": input.path,
-        "bytes_written": input.content.as_bytes().len(),
+        "bytes_written": input.content.len(),
     })))
 }
 
@@ -255,9 +255,11 @@ fn handle_list(root: &Path, call: ToolCall) -> GraphResult<ToolOutput> {
     })))
 }
 
-fn parse_input<T: for<'de> Deserialize<'de>>(tool: &str, input: serde_json::Value) -> GraphResult<T> {
-    serde_json::from_value(input)
-        .map_err(|err| tool_error(tool, format!("invalid input: {}", err)))
+fn parse_input<T: for<'de> Deserialize<'de>>(
+    tool: &str,
+    input: serde_json::Value,
+) -> GraphResult<T> {
+    serde_json::from_value(input).map_err(|err| tool_error(tool, format!("invalid input: {}", err)))
 }
 
 fn resolve_path(tool: &str, root: &Path, rel: &str) -> GraphResult<PathBuf> {

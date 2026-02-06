@@ -23,7 +23,7 @@ impl MessageRole {
         }
     }
 
-    pub fn from_str(input: &str) -> Option<Self> {
+    pub fn parse(input: &str) -> Option<Self> {
         match input.to_ascii_lowercase().as_str() {
             "system" => Some(MessageRole::System),
             "user" => Some(MessageRole::User),
@@ -31,6 +31,14 @@ impl MessageRole {
             "tool" => Some(MessageRole::Tool),
             _ => None,
         }
+    }
+}
+
+impl std::str::FromStr for MessageRole {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        MessageRole::parse(input).ok_or(())
     }
 }
 
@@ -336,14 +344,14 @@ mod tests {
 
     #[test]
     fn message_role_from_str_accepts_known_roles_case_insensitively() {
-        assert_eq!(MessageRole::from_str("system"), Some(MessageRole::System));
-        assert_eq!(MessageRole::from_str("USER"), Some(MessageRole::User));
-        assert_eq!(MessageRole::from_str("Assistant"), Some(MessageRole::Assistant));
-        assert_eq!(MessageRole::from_str("tool"), Some(MessageRole::Tool));
+        assert_eq!(MessageRole::parse("system"), Some(MessageRole::System));
+        assert_eq!(MessageRole::parse("USER"), Some(MessageRole::User));
+        assert_eq!(MessageRole::parse("Assistant"), Some(MessageRole::Assistant));
+        assert_eq!(MessageRole::parse("tool"), Some(MessageRole::Tool));
     }
 
     #[test]
     fn message_role_from_str_rejects_unknown_roles() {
-        assert_eq!(MessageRole::from_str("unknown"), None);
+        assert_eq!(MessageRole::parse("unknown"), None);
     }
 }

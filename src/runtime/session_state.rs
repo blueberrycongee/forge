@@ -236,20 +236,20 @@ impl SessionState {
         if matches!(next, Interrupted) {
             return !matches!(self.phase, Completed);
         }
-        match (&self.phase, next) {
-            (UserInput, ModelThinking) => true,
-            (ModelThinking, AssistantStreaming) => true,
-            (AssistantStreaming, ToolProposed) => true,
-            (AssistantStreaming, AssistantFinalize) => true,
-            (ToolProposed, ToolRunning) => true,
-            (ToolRunning, ToolResult) => true,
-            (ToolResult, AssistantStreaming) => true,
-            (ToolResult, AssistantFinalize) => true,
-            (AssistantFinalize, Completed) => true,
-            (Interrupted, Resumed) => true,
-            (Resumed, ModelThinking) => true,
-            _ => false,
-        }
+        matches!(
+            (&self.phase, next),
+            (UserInput, ModelThinking)
+                | (ModelThinking, AssistantStreaming)
+                | (AssistantStreaming, ToolProposed)
+                | (AssistantStreaming, AssistantFinalize)
+                | (ToolProposed, ToolRunning)
+                | (ToolRunning, ToolResult)
+                | (ToolResult, AssistantStreaming)
+                | (ToolResult, AssistantFinalize)
+                | (AssistantFinalize, Completed)
+                | (Interrupted, Resumed)
+                | (Resumed, ModelThinking)
+        )
     }
 
     pub fn try_transition(&mut self, next: SessionPhase) -> Result<(), String> {
@@ -315,7 +315,7 @@ impl SessionState {
             return None;
         }
         let mut message = Message::new(role);
-        message.parts.extend(self.pending_parts.drain(..));
+        message.parts.append(&mut self.pending_parts);
         self.messages.push(message.clone());
         Some(message)
     }

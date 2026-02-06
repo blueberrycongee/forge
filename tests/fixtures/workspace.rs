@@ -1,4 +1,4 @@
-﻿use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// Test workspace with a temporary root directory.
 #[derive(Debug)]
@@ -9,10 +9,7 @@ pub struct WorkspaceFixture {
 impl WorkspaceFixture {
     /// Create a new workspace in the system temp directory.
     pub fn new() -> std::io::Result<Self> {
-        let root = std::env::temp_dir().join(format!(
-            "forge-workspace-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let root = std::env::temp_dir().join(format!("forge-workspace-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root)?;
         Ok(Self { root })
     }
@@ -37,27 +34,18 @@ impl WorkspaceFixture {
         self.root.join(rel)
     }
 
-    /// Create a directory under the workspace root.
-    pub fn create_dir(&self, rel: impl AsRef<Path>) -> std::io::Result<PathBuf> {
-        let path = self.path(rel);
-        std::fs::create_dir_all(&path)?;
-        Ok(path)
-    }
-
     /// Write a file relative to the workspace root.
-    pub fn write_file(&self, rel: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> std::io::Result<PathBuf> {
+    pub fn write_file(
+        &self,
+        rel: impl AsRef<Path>,
+        contents: impl AsRef<[u8]>,
+    ) -> std::io::Result<PathBuf> {
         let path = self.path(rel);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(&path, contents)?;
         Ok(path)
-    }
-
-    /// Read a file relative to the workspace root as a string.
-    pub fn read_file(&self, rel: impl AsRef<Path>) -> std::io::Result<String> {
-        let path = self.path(rel);
-        std::fs::read_to_string(path)
     }
 
     /// Seed the workspace with a small file tree.

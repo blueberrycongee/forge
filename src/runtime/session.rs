@@ -38,7 +38,7 @@ impl SessionMessage {
     }
 
     pub fn to_message(&self) -> Option<crate::runtime::message::Message> {
-        let role = crate::runtime::message::MessageRole::from_str(&self.role)?;
+        let role = crate::runtime::message::MessageRole::parse(&self.role)?;
         let mut message = crate::runtime::message::Message::new(role);
         if !self.content.is_empty() {
             message.parts.push(crate::runtime::message::Part::TextFinal {
