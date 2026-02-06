@@ -68,6 +68,7 @@ pub fn event_name(event: &Event) -> &'static str {
         Event::PermissionAsked { .. } => "permission_asked",
         Event::PermissionReplied { .. } => "permission_replied",
         Event::SessionCompacted { .. } => "session_compacted",
+        Event::SessionCompactionRequested { .. } => "session_compaction_requested",
         Event::SessionPhaseChanged { .. } => "session_phase_changed",
         Event::SessionPhaseTransitionRejected { .. } => "session_phase_transition_rejected",
     }

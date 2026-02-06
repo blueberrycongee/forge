@@ -20,13 +20,8 @@ Thumbs.db
 *.tmp
 *.swp
 
-# Docs
-/doc/
-/docs/
-
 # Speckit artifacts
 /.specify/
-/specs/
 
 # Rust extras
 *.rlib

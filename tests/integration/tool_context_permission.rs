@@ -49,7 +49,7 @@ fn tool_context_permission_interrupts_and_resumes() {
     );
 
     let mut graph = StateGraph::<PermissionState>::new();
-    graph.add_node("loop", node);
+    graph.add_node_spec(node.into_node());
     graph.add_edge(START, "loop");
     graph.add_edge("loop", END);
 
@@ -97,7 +97,7 @@ fn tool_context_permission_without_reply_stays_interrupted() {
     );
 
     let mut graph = StateGraph::<PermissionState>::new();
-    graph.add_node("loop", node);
+    graph.add_node_spec(node.into_node());
     graph.add_edge(START, "loop");
     graph.add_edge("loop", END);
 

@@ -53,11 +53,12 @@ fn aborting_tool_run_marks_aborted() {
     );
 
     let mut graph = StateGraph::<AbortState>::new();
-    graph.add_node("loop", node);
+    graph.add_node_spec(node.into_node());
     graph.add_edge(START, "loop");
     graph.add_edge("loop", END);
 
-    let sink = Arc::new(CaptureSink::default());
+    let capture = Arc::new(CaptureSink::default());
+    let sink: Arc<dyn EventSink> = capture.clone();
     let compiled = graph
         .compile()
         .expect("compile")
@@ -74,6 +75,6 @@ fn aborting_tool_run_marks_aborted() {
         Err(err) => panic!("unexpected error: {}", err),
     }
 
-    let events = sink.events.lock().unwrap();
+    let events = capture.events.lock().unwrap();
     assert!(events.iter().any(|event| matches!(event, Event::RunAborted { .. })));
 }

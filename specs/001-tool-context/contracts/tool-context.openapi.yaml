@@ -1,0 +1,14 @@
+openapi: 3.0.3
+info:
+  title: Forge Tool Context API
+  version: "0.1.0"
+paths:
+  /runs/{run_id}/permissions:
+    post:
+      summary: Reply to a permission prompt for an interrupted run.
+  /runs/{run_id}/abort:
+    post:
+      summary: Abort a running workflow.
+  /runs/{run_id}/attachments/{attachment_id}:
+    get:
+      summary: Fetch a stored tool attachment by id.

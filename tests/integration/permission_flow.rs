@@ -9,7 +9,7 @@ use forge::runtime::state::GraphState;
 use forge::runtime::tool::{ToolCall, ToolOutput, ToolRegistry};
 use futures::executor::block_on;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 struct FlowState {
     log: Vec<String>,
 }

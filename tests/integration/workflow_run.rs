@@ -1,20 +1,15 @@
-﻿#[path = "../fixtures/mod.rs"]
-mod fixtures;
-#[path = "../helpers/mod.rs"]
-mod helpers;
-
 use std::sync::Arc;
 
-use fixtures::workspace::WorkspaceFixture;
+use crate::fixtures::workspace::WorkspaceFixture;
+use crate::helpers::events::EventCollector;
 use forge::runtime::constants::{END, START};
 use forge::runtime::event::Event;
+use forge::runtime::graph::StateGraph;
 use forge::runtime::prelude::LoopNode;
 use forge::runtime::state::GraphState;
 use forge::runtime::tool::{ToolCall, ToolRegistry};
 use forge::runtime::toolkit::file_tools::register_file_tools;
-use forge::runtime::graph::StateGraph;
 use futures::executor::block_on;
-use helpers::events::EventCollector;
 
 #[derive(Clone, Default)]
 struct WorkflowState {
@@ -32,61 +27,65 @@ fn workflow_runs_with_file_tools() {
     register_file_tools(&mut registry, fixture.root());
     let registry = Arc::new(registry);
 
-    let node = LoopNode::with_tools("workflow", Arc::clone(&registry), |mut state: WorkflowState, ctx| async move {
-        let read = ctx
-            .run_tool(ToolCall::new(
-                "read",
-                "call-1",
-                serde_json::json!({"path": "notes/todo.txt"}),
+    let node = LoopNode::with_tools(
+        "workflow",
+        Arc::clone(&registry),
+        |mut state: WorkflowState, ctx| async move {
+            let read = ctx
+                .run_tool(ToolCall::new(
+                    "read",
+                    "call-1",
+                    serde_json::json!({"path": "notes/todo.txt"}),
+                ))
+                .await?;
+            let content = read
+                .content
+                .get("content")
+                .and_then(|value| value.as_str())
+                .unwrap_or("")
+                .to_string();
+            state.log.push(content);
+
+            let search = ctx
+                .run_tool(ToolCall::new(
+                    "search",
+                    "call-2",
+                    serde_json::json!({"query": "beta"}),
+                ))
+                .await?;
+            let matches = search
+                .content
+                .get("matches")
+                .and_then(|value| value.as_array())
+                .map(|items| items.len())
+                .unwrap_or(0);
+            state.matches = matches;
+
+            ctx.run_tool(ToolCall::new(
+                "write",
+                "call-3",
+                serde_json::json!({"path": "out.txt", "content": "done"}),
             ))
             .await?;
-        let content = read
-            .content
-            .get("content")
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string();
-        state.log.push(content);
 
-        let search = ctx
-            .run_tool(ToolCall::new(
-                "search",
-                "call-2",
-                serde_json::json!({"query": "beta"}),
-            ))
-            .await?;
-        let matches = search
-            .content
-            .get("matches")
-            .and_then(|value| value.as_array())
-            .map(|items| items.len())
-            .unwrap_or(0);
-        state.matches = matches;
+            let confirm = ctx
+                .run_tool(ToolCall::new(
+                    "read",
+                    "call-4",
+                    serde_json::json!({"path": "out.txt"}),
+                ))
+                .await?;
+            let confirm_content = confirm
+                .content
+                .get("content")
+                .and_then(|value| value.as_str())
+                .unwrap_or("")
+                .to_string();
+            state.log.push(confirm_content);
 
-        ctx.run_tool(ToolCall::new(
-            "write",
-            "call-3",
-            serde_json::json!({"path": "out.txt", "content": "done"}),
-        ))
-        .await?;
-
-        let confirm = ctx
-            .run_tool(ToolCall::new(
-                "read",
-                "call-4",
-                serde_json::json!({"path": "out.txt"}),
-            ))
-            .await?;
-        let confirm_content = confirm
-            .content
-            .get("content")
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string();
-        state.log.push(confirm_content);
-
-        Ok(state)
-    });
+            Ok(state)
+        },
+    );
 
     let mut graph = StateGraph::<WorkflowState>::new();
     graph.add_node_spec(node.into_node());
@@ -95,8 +94,8 @@ fn workflow_runs_with_file_tools() {
 
     let compiled = graph.compile().expect("compile");
     let collector = EventCollector::new();
-    let final_state = block_on(compiled.stream_events(WorkflowState::default(), collector.sink()))
-        .expect("run");
+    let final_state =
+        block_on(compiled.stream_events(WorkflowState::default(), collector.sink())).expect("run");
 
     assert!(final_state.log.iter().any(|entry| entry.contains("alpha")));
     assert_eq!(final_state.log.last().map(String::as_str), Some("done"));
