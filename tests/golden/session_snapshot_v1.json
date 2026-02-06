@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "session_id": "session-1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    },
+    {
+      "role": "assistant",
+      "content": "world"
+    }
+  ],
+  "trace": {
+    "events": [
+      {
+        "NodeStart": {
+          "node": "planner"
+        }
+      },
+      {
+        "NodeFinish": {
+          "node": "planner"
+        }
+      },
+      {
+        "Compacted": {
+          "summary": "short",
+          "truncated_before": 2
+        }
+      }
+    ],
+    "spans": [
+      {
+        "node": "planner",
+        "start_ms": 1000,
+        "duration_ms": 25
+      }
+    ]
+  },
+  "compactions": [
+    {
+      "summary": "summary-1",
+      "truncated_before": 1
+    }
+  ]
+}

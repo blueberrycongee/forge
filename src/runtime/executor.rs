@@ -864,26 +864,24 @@ impl<S: GraphState> CompiledGraph<S> {
                     state = new_state;
                 }
                 Err(GraphError::Interrupted(interrupts)) => {
-                    if has_resume {
-                        if self.config.debug {
-                            println!("[Forge] Resuming from interrupt at node: {}", current_node);
-                        }
-                    } else {
-                        // No resume value, return interrupted state
-                        return Ok(ExecutionResult::Interrupted {
-                            checkpoint: Checkpoint {
-                                run_id: run_id.clone(),
-                                checkpoint_id: uuid::Uuid::new_v4().to_string(),
-                                created_at: chrono::Utc::now().to_rfc3339(),
-                                state,
-                                next_node: current_node,
-                                pending_interrupts: interrupts.clone(),
-                                iterations,
-                                resume_values,
-                            },
-                            interrupts,
-                        });
+                    if has_resume && self.config.debug {
+                        println!("[Forge] Resuming from interrupt at node: {}", current_node);
                     }
+                    // Node still interrupted after this execution attempt.
+                    // Return a fresh checkpoint so callers can provide another resume value.
+                    return Ok(ExecutionResult::Interrupted {
+                        checkpoint: Checkpoint {
+                            run_id: run_id.clone(),
+                            checkpoint_id: uuid::Uuid::new_v4().to_string(),
+                            created_at: chrono::Utc::now().to_rfc3339(),
+                            state,
+                            next_node: current_node,
+                            pending_interrupts: interrupts.clone(),
+                            iterations,
+                            resume_values,
+                        },
+                        interrupts,
+                    });
                 }
                 Err(e) => return Err(e),
             }

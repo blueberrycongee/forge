@@ -1,16 +1,10 @@
-﻿use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use forge::runtime::error::GraphError;
 use forge::runtime::event::{Event, EventSink, ToolUpdate};
 use forge::runtime::permission::{PermissionPolicy, PermissionSession};
 use forge::runtime::tool::{
-    AttachmentPolicy,
-    ToolCall,
-    ToolContext,
-    ToolDefinition,
-    ToolOutput,
-    ToolRegistry,
-    ToolRunner,
+    AttachmentPolicy, ToolCall, ToolContext, ToolDefinition, ToolOutput, ToolRegistry, ToolRunner,
 };
 use futures::executor::block_on;
 
@@ -25,10 +19,27 @@ impl EventSink for CaptureSink {
     }
 }
 
+fn event_labels(events: &[Event]) -> Vec<&'static str> {
+    events
+        .iter()
+        .map(|event| match event {
+            Event::ToolStatus { .. } => "tool_status",
+            Event::ToolStart { .. } => "tool_start",
+            Event::ToolUpdate { .. } => "tool_update",
+            Event::ToolAttachment { .. } => "tool_attachment",
+            Event::ToolResult { .. } => "tool_result",
+            Event::ToolError { .. } => "tool_error",
+            _ => "other",
+        })
+        .collect()
+}
+
 #[test]
 fn tool_runner_reports_success_events() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
 
     let call = ToolCall::new("echo", "call-1", serde_json::json!({"msg": "hi"}));
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
@@ -39,21 +50,42 @@ fn tool_runner_reports_success_events() {
         call.tool.clone(),
         call.call_id.clone(),
     );
-    let result = block_on(ToolRunner::run_with_events(call, context, |call, _ctx| async move {
-        Ok(ToolOutput::text(format!("ok:{}", call.tool)))
-    }))
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |call, _ctx| async move { Ok(ToolOutput::text(format!("ok:{}", call.tool))) },
+    ))
     .expect("tool run");
 
-    assert_eq!(result.content, serde_json::Value::String("ok:echo".to_string()));
+    assert_eq!(
+        result.content,
+        serde_json::Value::String("ok:echo".to_string())
+    );
     let captured = events.lock().unwrap();
-    assert!(captured.iter().any(|event| matches!(event, Event::ToolStart { .. })));
-    assert!(captured.iter().any(|event| matches!(event, Event::ToolResult { .. })));
+    assert!(captured
+        .iter()
+        .any(|event| matches!(event, Event::ToolStart { .. })));
+    assert!(captured
+        .iter()
+        .any(|event| matches!(event, Event::ToolResult { .. })));
+    assert_eq!(
+        event_labels(&captured),
+        vec![
+            "tool_status",
+            "tool_start",
+            "tool_status",
+            "tool_status",
+            "tool_result",
+        ]
+    );
 }
 
 #[test]
 fn tool_context_emits_tool_update() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
 
     let call = ToolCall::new("echo", "call-3", serde_json::json!({}));
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
@@ -64,11 +96,12 @@ fn tool_context_emits_tool_update() {
         call.tool.clone(),
         call.call_id.clone(),
     );
-    context.emit_tool_update(ToolUpdate::OutputDelta {
-        delta: "hi".to_string(),
-        stream: Some("stdout".to_string()),
-    })
-    .expect("emit update");
+    context
+        .emit_tool_update(ToolUpdate::OutputDelta {
+            delta: "hi".to_string(),
+            stream: Some("stdout".to_string()),
+        })
+        .expect("emit update");
 
     let captured = events.lock().unwrap();
     assert!(captured.iter().any(|event| matches!(
@@ -81,7 +114,9 @@ fn tool_context_emits_tool_update() {
 #[test]
 fn tool_runner_reports_error_events() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink { events: events.clone() });
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
 
     let call = ToolCall::new("fail", "call-2", serde_json::json!({}));
     let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
@@ -92,19 +127,89 @@ fn tool_runner_reports_error_events() {
         call.tool.clone(),
         call.call_id.clone(),
     );
-    let result = block_on(ToolRunner::run_with_events(call, context, |_call, _ctx| async move {
-        Err(GraphError::ExecutionError {
-            node: "tool:fail".to_string(),
-            message: "boom".to_string(),
-        })
-    }));
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move {
+            Err(GraphError::ExecutionError {
+                node: "tool:fail".to_string(),
+                message: "boom".to_string(),
+            })
+        },
+    ));
 
     assert!(result.is_err());
     let captured = events.lock().unwrap();
-    assert!(captured.iter().any(|event| matches!(event, Event::ToolError { .. })));
     assert!(captured
         .iter()
-        .any(|event| matches!(event, Event::ToolStatus { state: forge::runtime::tool::ToolState::Error, .. })));
+        .any(|event| matches!(event, Event::ToolError { .. })));
+    assert!(captured.iter().any(|event| matches!(
+        event,
+        Event::ToolStatus {
+            state: forge::runtime::tool::ToolState::Error,
+            ..
+        }
+    )));
+    assert_eq!(
+        event_labels(&captured),
+        vec![
+            "tool_status",
+            "tool_start",
+            "tool_status",
+            "tool_status",
+            "tool_error",
+        ]
+    );
+    assert!(!captured
+        .iter()
+        .any(|event| matches!(event, Event::ToolResult { .. })));
+}
+
+#[test]
+fn tool_runner_reports_attachment_before_result() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sink: Arc<dyn EventSink> = Arc::new(CaptureSink {
+        events: events.clone(),
+    });
+
+    let call = ToolCall::new("artifact", "call-4", serde_json::json!({}));
+    let gate = Arc::new(PermissionSession::new(PermissionPolicy::default()));
+    let context = ToolContext::new(
+        Arc::clone(&sink),
+        gate,
+        AttachmentPolicy::default(),
+        call.tool.clone(),
+        call.call_id.clone(),
+    );
+
+    let result = block_on(ToolRunner::run_with_events(
+        call,
+        context,
+        |_call, _ctx| async move {
+            Ok(ToolOutput::text("ok").with_attachment(
+                forge::runtime::tool::ToolAttachment::inline(
+                    "report.txt",
+                    "text/plain",
+                    serde_json::json!("done"),
+                ),
+            ))
+        },
+    ))
+    .expect("tool run");
+
+    assert_eq!(result.attachments.len(), 1);
+    let captured = events.lock().unwrap();
+    assert_eq!(
+        event_labels(&captured),
+        vec![
+            "tool_status",
+            "tool_start",
+            "tool_status",
+            "tool_status",
+            "tool_attachment",
+            "tool_result",
+        ]
+    );
 }
 
 #[test]

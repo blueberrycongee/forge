@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "event_id": "evt-1",
+    "timestamp_ms": 1700000000000,
+    "seq": 42
+  },
+  "event": {
+    "SessionCompactionRequested": {
+      "session_id": "session-1",
+      "message_count": 12,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 4,
+        "cache_read": 10,
+        "cache_write": 0
+      },
+      "context_window": 8192,
+      "threshold_ratio": 0.9
+    }
+  }
+}

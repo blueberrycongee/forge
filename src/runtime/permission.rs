@@ -1,4 +1,4 @@
-﻿//! Permission evaluation primitives for tool/operation gating.
+//! Permission evaluation primitives for tool/operation gating.
 
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +39,11 @@ impl PermissionPolicy {
 
     pub fn decide(&self, permission: &str) -> PermissionDecision {
         for rule in &self.rules {
-            if rule.patterns.iter().any(|pattern| matches_pattern(pattern, permission)) {
+            if rule
+                .patterns
+                .iter()
+                .any(|pattern| matches_pattern(pattern, permission))
+            {
                 return rule.action;
             }
         }
@@ -304,15 +308,8 @@ fn parse_reply_str(value: &str) -> Option<PermissionReply> {
 #[cfg(test)]
 mod tests {
     use super::{
-        PermissionDecision,
-        PermissionGate,
-        PermissionPolicy,
-        PermissionRequest,
-        PermissionRule,
-        PermissionSession,
-        PermissionSnapshot,
-        PermissionStore,
-        InMemoryPermissionStore,
+        InMemoryPermissionStore, PermissionDecision, PermissionGate, PermissionPolicy,
+        PermissionRequest, PermissionRule, PermissionSession, PermissionSnapshot, PermissionStore,
     };
     use crate::runtime::error::ResumeCommand;
     use crate::runtime::event::PermissionReply;
@@ -408,6 +405,47 @@ mod tests {
     }
 
     #[test]
+    fn permission_session_override_precedence_reject_over_always_and_once() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:*".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:*", PermissionReply::Always);
+        session.apply_reply("tool:deploy", PermissionReply::Once);
+        session.apply_reply("tool:deploy", PermissionReply::Reject);
+
+        assert_eq!(session.decide("tool:deploy"), PermissionDecision::Deny);
+        assert_eq!(session.decide("tool:list"), PermissionDecision::Allow);
+    }
+
+    #[test]
+    fn permission_session_once_prefers_most_specific_pattern_first() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:*".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        session.apply_reply("tool:*", PermissionReply::Once);
+        session.apply_reply("tool:deploy", PermissionReply::Once);
+
+        assert_eq!(session.decide("tool:deploy"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:deploy"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:deploy"), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn permission_policy_prefix_wildcard_respects_boundary() {
+        let policy = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:*".to_string()],
+        )]);
+
+        assert_eq!(policy.decide("tool:read"), PermissionDecision::Ask);
+        assert_eq!(policy.decide("toolbox:read"), PermissionDecision::Allow);
+    }
+
+    #[test]
     fn permission_session_applies_resume_command() {
         let base = PermissionPolicy::new(vec![PermissionRule::new(
             PermissionDecision::Ask,
@@ -419,6 +457,20 @@ mod tests {
 
         assert_eq!(reply, Some(PermissionReply::Once));
         assert_eq!(session.decide("tool:echo"), PermissionDecision::Allow);
+        assert_eq!(session.decide("tool:echo"), PermissionDecision::Ask);
+    }
+
+    #[test]
+    fn permission_session_ignores_invalid_resume_command() {
+        let base = PermissionPolicy::new(vec![PermissionRule::new(
+            PermissionDecision::Ask,
+            vec!["tool:echo".to_string()],
+        )]);
+        let session = PermissionSession::new(base);
+        let command = ResumeCommand::new("unexpected");
+        let reply = session.apply_resume("tool:echo", &command);
+
+        assert_eq!(reply, None);
         assert_eq!(session.decide("tool:echo"), PermissionDecision::Ask);
     }
 
