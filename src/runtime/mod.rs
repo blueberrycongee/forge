@@ -77,6 +77,7 @@ pub mod executor;
 pub mod channel;
 pub mod event;
 pub mod message;
+pub mod component;
 pub mod compaction;
 pub mod permission;
 pub mod prune;
@@ -84,6 +85,7 @@ pub mod tool;
 pub mod trace;
 pub mod output;
 pub mod platform;
+pub mod provider;
 pub mod session;
 pub mod session_state;
 pub mod r#loop;
@@ -119,6 +121,18 @@ pub use crate::runtime::event::{
     TokenUsage,
 };
     pub use crate::runtime::message::{Message, MessageRole, Part};
+    pub use crate::runtime::component::{
+        register_retriever_tool,
+        ChatModel,
+        ChatRequest,
+        ChatResponse,
+        EmbeddingModel,
+        HashEmbeddingModel,
+        InMemoryRetriever,
+        MockChatModel,
+        RetrievedDocument,
+        Retriever,
+    };
     pub use crate::runtime::compaction::{CompactionPolicy, CompactionResult};
     pub use crate::runtime::prune::{PrunePolicy, PruneResult};
     pub use crate::runtime::trace::{ExecutionTrace, TraceEvent, TraceReplay, TraceSpan};
@@ -136,6 +150,10 @@ pub use crate::runtime::event::{
         stream_cli_jsonl_records,
         stream_sse_events,
         stream_sse_records,
+    };
+    pub use crate::runtime::provider::openai::{
+        OpenAiChatModel,
+        OpenAiChatModelConfig,
     };
     pub use crate::runtime::session::{
         AttachmentResolver,
@@ -187,5 +205,3 @@ pub fn builtin_tool_registry(root: impl Into<std::path::PathBuf>) -> tool::ToolR
     toolkit::file_tools::register_file_tools(&mut registry, root);
     registry
 }
-
-

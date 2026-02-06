@@ -348,7 +348,7 @@ impl ToolExecutor {
                 let request = PermissionRequest::new(permission.clone(), vec![permission.clone()])
                     .with_metadata(metadata)
                     .with_always(vec![permission.clone()]);
-                self.sink.emit(request.to_event());
+                self.sink.emit(request.to_event())?;
                 Err(GraphError::Interrupted(vec![Interrupt::new(
                     request,
                     format!("permission:{}", permission),
@@ -648,7 +648,7 @@ impl<S: GraphState> CompiledGraph<S> {
                         session_id,
                         summary: result.summary,
                         truncated_before: result.truncated_before,
-                    });
+                    })?;
                 } else {
                     sink.emit(crate::runtime::event::Event::SessionCompactionRequested {
                         session_id,
@@ -656,7 +656,7 @@ impl<S: GraphState> CompiledGraph<S> {
                         tokens: token_usage.unwrap_or_default(),
                         context_window: self.config.compaction_policy.context_window,
                         threshold_ratio: self.config.compaction_policy.token_ratio,
-                    });
+                    })?;
                 }
             }
 
@@ -723,7 +723,7 @@ impl<S: GraphState> CompiledGraph<S> {
         self.emit_run_event(Event::RunStarted {
             run_id: run_id.clone(),
             status: crate::runtime::session_state::RunStatus::Running,
-        });
+        })?;
         let result = self
             .run_with_checkpoint(run_id.clone(), initial_state, START.to_string(), 0, HashMap::new())
             .await;
@@ -732,25 +732,25 @@ impl<S: GraphState> CompiledGraph<S> {
                 self.emit_run_event(Event::RunCompleted {
                     run_id,
                     status: crate::runtime::session_state::RunStatus::Completed,
-                });
+                })?;
             }
             Ok(ExecutionResult::Interrupted { checkpoint, .. }) => {
                 self.emit_run_event(Event::RunPaused {
                     run_id,
                     checkpoint_id: checkpoint.checkpoint_id.clone(),
-                });
+                })?;
             }
             Err(GraphError::Aborted { reason }) => {
                 self.emit_run_event(Event::RunAborted {
                     run_id,
                     reason: reason.clone(),
-                });
+                })?;
             }
             Err(err) => {
                 self.emit_run_event(Event::RunFailed {
                     run_id,
                     error: err.to_string(),
-                });
+                })?;
             }
         }
         result
@@ -774,7 +774,7 @@ impl<S: GraphState> CompiledGraph<S> {
         self.emit_run_event(Event::RunResumed {
             run_id: run_id.clone(),
             checkpoint_id: checkpoint.checkpoint_id.clone(),
-        });
+        })?;
         let result = self
             .run_with_checkpoint(
                 run_id.clone(),
@@ -789,25 +789,25 @@ impl<S: GraphState> CompiledGraph<S> {
                 self.emit_run_event(Event::RunCompleted {
                     run_id,
                     status: crate::runtime::session_state::RunStatus::Completed,
-                });
+                })?;
             }
             Ok(ExecutionResult::Interrupted { checkpoint, .. }) => {
                 self.emit_run_event(Event::RunPaused {
                     run_id,
                     checkpoint_id: checkpoint.checkpoint_id.clone(),
-                });
+                })?;
             }
             Err(GraphError::Aborted { reason }) => {
                 self.emit_run_event(Event::RunAborted {
                     run_id,
                     reason: reason.clone(),
-                });
+                })?;
             }
             Err(err) => {
                 self.emit_run_event(Event::RunFailed {
                     run_id,
                     error: err.to_string(),
-                });
+                })?;
             }
         }
         result
@@ -981,10 +981,11 @@ impl<S: GraphState> CompiledGraph<S> {
         }
     }
 
-    fn emit_run_event(&self, event: Event) {
+    fn emit_run_event(&self, event: Event) -> GraphResult<()> {
         if let Some(sink) = &self.config.run_event_sink {
-            sink.emit(event);
+            sink.emit(event)?;
         }
+        Ok(())
     }
 }
 
@@ -1061,13 +1062,13 @@ impl RecordingSink {
 }
 
 impl EventSink for RecordingSink {
-    fn emit(&self, event: Event) {
+    fn emit(&self, event: Event) -> GraphResult<()> {
         let record = self.sequencer.record(event.clone());
         self.history.lock().unwrap().push(record.clone());
         if let Some(record_sink) = &self.record_sink {
-            record_sink.emit_record(record.clone());
+            record_sink.emit_record(record.clone())?;
         }
-        self.inner.emit(event);
+        self.inner.emit(event)
     }
 }
 
@@ -1090,8 +1091,10 @@ mod tests {
     use crate::runtime::constants::START;
     use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSink};
     use crate::runtime::graph::StateGraph;
+    use crate::runtime::output::JsonLineEventSink;
     use crate::runtime::prune::PrunePolicy;
     use crate::runtime::state::GraphState;
+    use std::io;
     use std::sync::{Arc, Mutex};
     use futures::executor::block_on;
 
@@ -1164,8 +1167,9 @@ mod tests {
     }
 
     impl EventSink for CaptureSink {
-        fn emit(&self, event: Event) {
+        fn emit(&self, event: Event) -> GraphResult<()> {
             self.events.lock().unwrap().push(event);
+            Ok(())
         }
     }
 
@@ -1175,8 +1179,9 @@ mod tests {
     }
 
     impl EventRecordSink for CaptureRecordSink {
-        fn emit_record(&self, record: EventRecord) {
+        fn emit_record(&self, record: EventRecord) -> GraphResult<()> {
             self.records.lock().unwrap().push(record);
+            Ok(())
         }
     }
 
@@ -1193,7 +1198,7 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hello".to_string(),
-            });
+            })?;
             state.steps.push("stream".to_string());
             Ok(state)
         });
@@ -1205,6 +1210,43 @@ mod tests {
 
         assert_eq!(final_state.steps, vec!["stream".to_string()]);
         assert_eq!(events.lock().unwrap().len(), 1);
+    }
+
+    struct FailingWriter;
+
+    impl io::Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "sink write failed"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn stream_events_propagates_sink_write_errors() {
+        let sink: Arc<dyn EventSink> = Arc::new(JsonLineEventSink::new(FailingWriter));
+
+        let mut graph = StateGraph::<StreamState>::new();
+        graph.add_stream_node("streamer", |state, sink| async move {
+            sink.emit(Event::TextDelta {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                delta: "hello".to_string(),
+            })?;
+            Ok(state)
+        });
+        graph.add_edge(START, "streamer");
+        graph.add_edge("streamer", END);
+
+        let compiled = graph.compile().expect("compile");
+        let result = block_on(compiled.stream_events(StreamState::default(), sink));
+
+        assert!(matches!(
+            result,
+            Err(GraphError::ExecutionError { node, .. }) if node == "event_sink:jsonl"
+        ));
     }
 
     #[derive(Debug)]
@@ -1281,7 +1323,7 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hello".to_string(),
-            });
+            })?;
             Ok(state)
         });
         graph.add_edge(START, "node");
@@ -1331,12 +1373,12 @@ mod tests {
                 tool: "grep".to_string(),
                 call_id: "1".to_string(),
                 input: serde_json::json!({"q": "hi"}),
-            });
+            })?;
             sink.emit(Event::ToolResult {
                 tool: "grep".to_string(),
                 call_id: "1".to_string(),
                 output: crate::runtime::tool::ToolOutput::text("ok"),
-            });
+            })?;
             Ok(state)
         });
         graph.add_edge(START, "node");
@@ -1381,12 +1423,12 @@ mod tests {
                 tool: "grep".to_string(),
                 call_id: "1".to_string(),
                 input: serde_json::json!({"q": "hi"}),
-            });
+            })?;
             sink.emit(Event::ToolResult {
                 tool: "grep".to_string(),
                 call_id: "1".to_string(),
                 output: crate::runtime::tool::ToolOutput::text("ok"),
-            });
+            })?;
             Ok(state)
         });
         graph.add_stream_node("second", |state, sink| async move {
@@ -1394,17 +1436,17 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hello".to_string(),
-            });
+            })?;
             sink.emit(Event::ToolStart {
                 tool: "grep".to_string(),
                 call_id: "2".to_string(),
                 input: serde_json::json!({"q": "hi"}),
-            });
+            })?;
             sink.emit(Event::ToolResult {
                 tool: "grep".to_string(),
                 call_id: "2".to_string(),
                 output: crate::runtime::tool::ToolOutput::text("ok"),
-            });
+            })?;
             Ok(state)
         });
         graph.add_edge(START, "first");

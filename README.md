@@ -2,51 +2,47 @@
 
 Language: English | [中文 README](README.zh.md)
 
-Forge is a Rust framework for building stateful, event-driven agent runtimes.
-It focuses on streaming execution, tool lifecycles, permission gating, and
-audit-ready observability.
+[![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-active%20development-yellow.svg)](#project-status)
 
-## Status
+Forge is a Rust-first orchestration runtime for long-running, stateful agent workflows.
+It focuses on durable graph execution, event-streaming, tool lifecycles, permission gating,
+and checkpoint-based interrupt/resume.
 
-Active development. APIs may evolve.
+## Overview
 
-## Why Forge
+Forge provides low-level runtime primitives. It does not prescribe prompting style,
+agent architecture, or tool naming conventions.
 
-- **Streaming by default**: structured runtime events for text, tool progress,
-  permissions, compaction, and run lifecycle.
-- **Tool-first orchestration**: a loop abstraction designed for LLM ↔ tools
-  workflows, without prescribing tool names.
-- **Safety + control**: permission policies and resume flows to keep humans in
-  the loop.
-- **Traceable sessions**: snapshots, checkpoints, and replay for audits and
-  debugging.
+Use Forge when you need:
 
-## Core Concepts
+- explicit state transitions across graph nodes
+- structured runtime events for UI/CLI streaming and audit logs
+- controlled tool execution with permission and attachment policies
+- resumable execution for human-in-the-loop and failure recovery
 
-- **StateGraph / CompiledGraph**: build stateful workflows as graphs of async
-  nodes.
-- **LoopNode / LoopContext**: a streaming loop that can call tools, emit events,
-  and resume after interruptions.
-- **ToolRegistry / ToolDefinition / ToolOutput**: tool contracts, lifecycle
-  events, and structured outputs with attachments.
-- **PermissionPolicy / PermissionSession**: allow/ask/deny decisions with
-  explicit resumes.
-- **Event sinks**: JSONL/SSE sinks for CLI or UI streaming.
-- **SessionState / Trace**: persistent run state, token usage, and replay.
+## Core Capabilities
+
+- Durable execution: compile state graphs into resumable plans with checkpoints.
+- Streaming event protocol: text, tool, permission, compaction, and run lifecycle events.
+- Tool-first runtime loop: orchestrate LLM-to-tool interaction with lifecycle metadata.
+- Permission system: allow/ask/deny decisions with persisted session state.
+- Session model: snapshots, replay traces, and run metadata for debugging and audits.
+- Provider adapters: built-in OpenAI `ChatModel` adapter via `runtime::provider::openai`.
 
 ## Installation
 
-Forge is not published on crates.io yet. Use a git dependency:
+Forge is not published on crates.io yet. Use a Git dependency and pin a commit:
 
 ```toml
 [dependencies]
 forge = { git = "https://github.com/blueberrycongee/forge", rev = "<commit>" }
 ```
 
-Pin `rev` for reproducible builds. When tags or crates.io releases are
-available, prefer those.
+## Quick Start
 
-## Quickstart: StateGraph
+### 1) Build a StateGraph
 
 ```rust
 use forge::runtime::constants::START;
@@ -78,7 +74,7 @@ assert_eq!(result.count, 1);
 # }
 ```
 
-## Quickstart: Tool + LoopNode
+### 2) Run a tool loop with permissions
 
 ```rust
 use forge::runtime::permission::{PermissionPolicy, PermissionSession};
@@ -140,32 +136,67 @@ let _ = compiled.invoke(State::default()).await?;
 # }
 ```
 
-## Event Streaming
+### 3) Use the OpenAI provider adapter
 
-Forge emits structured events through an `EventSink`. You can use built-in
-sinks for CLI/UI streaming:
+```rust
+use forge::runtime::prelude::{ChatModel, ChatRequest, Message, MessageRole, OpenAiChatModel, OpenAiChatModelConfig, Part};
+use futures::executor::block_on;
 
-- `JsonLineEventSink` / `JsonLineEventRecordSink`
-- `SseEventSink` / `SseEventRecordSink`
+let model = OpenAiChatModel::new(OpenAiChatModelConfig::new("gpt-4o-mini"))?;
+let mut msg = Message::new(MessageRole::User);
+msg.parts.push(Part::TextFinal { text: "Say hi in one short sentence.".to_string() });
+let req = ChatRequest::new("session-1", "message-1", vec![msg]);
 
-These live in `forge::runtime::output`.
-
-## Repository Layout
-
-```text
-src/
-  runtime/
-    graph.rs          # StateGraph, edges, routing
-    executor.rs       # CompiledGraph execution, checkpoints
-    loop.rs           # LoopNode + LoopContext
-    tool.rs           # Tool registry, lifecycle, attachments
-    permission.rs     # Permission policy + session
-    event.rs          # Event protocol
-    session_state.rs  # Run metadata + reducer
-    session.rs        # Snapshots and attachment store
-    trace.rs          # Trace/replay
-tests/
+let resp = block_on(model.generate(req))?;
+println!("model={:?} text={:?}", resp.model, resp.text());
+# Ok::<(), forge::runtime::error::GraphError>(())
 ```
+
+## Architecture
+
+| Module | Responsibility |
+| --- | --- |
+| `runtime::graph` | Build and compile state graphs (`StateGraph -> CompiledGraph`) |
+| `runtime::executor` | Run lifecycle, checkpoints, resume commands, and streaming |
+| `runtime::loop` | Tool loop abstraction (`LoopNode`, `LoopContext`) |
+| `runtime::tool` | Tool contracts, registry, metadata, attachments, statuses |
+| `runtime::permission` | Permission policies and session decisions |
+| `runtime::event` | Runtime event protocol and sequencing |
+| `runtime::session_state` | Event-to-state reduction and run metadata |
+| `runtime::session` | Session snapshots and persistence helpers |
+| `runtime::provider` | External model adapters (currently OpenAI chat) |
+
+## Event Protocol
+
+Forge emits structured events through `EventSink` / `EventRecordSink`.
+Built-in stream outputs:
+
+- `JsonLineEventSink` and `JsonLineEventRecordSink`
+- `SseEventSink` and `SseEventRecordSink`
+
+Event families include:
+
+- Run lifecycle: `RunStarted`, `RunPaused`, `RunResumed`, `RunCompleted`, `RunFailed`
+- Text and message updates: `TextDelta`, `TextFinal`, `Attachment`, `Error`
+- Tool lifecycle: `ToolStart`, `ToolUpdate`, `ToolResult`, `ToolError`, `ToolStatus`
+- Permission flow: `PermissionAsked`, `PermissionReplied`
+- Session controls: compaction and phase transition events
+
+## Examples
+
+Runnable examples are in `/examples`:
+
+- `cargo run --example core_workflow`
+- `cargo run --example multi_agent_graph`
+- `cargo run --example tool_context`
+
+## Project Status
+
+Forge is in active pre-1.0 development.
+
+- APIs may change between commits.
+- Release cadence is milestone-driven instead of time-driven.
+- For production usage, pin a specific commit and run your own compatibility tests.
 
 ## Development
 
@@ -174,11 +205,18 @@ cargo test
 cargo clippy
 ```
 
+## Documentation
+
+- Runtime evaluation notes: [EVALUATION.md](EVALUATION.md)
+- Progress log: [PROGRESS.md](PROGRESS.md)
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+
 ## Contributing
 
-See `CONTRIBUTING.md`. Please follow `CODE_OF_CONDUCT.md`. Security issues go to
-`SECURITY.md`.
+Contributions are welcome. Please read `CONTRIBUTING.md` and follow
+`CODE_OF_CONDUCT.md`.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE).

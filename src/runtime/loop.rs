@@ -60,8 +60,8 @@ impl LoopContext {
         }
     }
 
-    pub fn emit(&self, event: Event) {
-        self.sink.emit(event);
+    pub fn emit(&self, event: Event) -> GraphResult<()> {
+        self.sink.emit(event)
     }
 
     pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
@@ -73,24 +73,26 @@ impl LoopContext {
         &self,
         permission: impl Into<String>,
         reply: crate::runtime::event::PermissionReply,
-    ) {
+    ) -> GraphResult<()> {
         let permission = permission.into();
         self.gate.apply_reply(&permission, reply.clone());
-        self.emit(Event::PermissionReplied { permission, reply });
+        self.emit(Event::PermissionReplied { permission, reply })
     }
 
     pub fn resume_permission(
         &self,
         permission: impl Into<String>,
         command: &ResumeCommand,
-    ) -> Option<crate::runtime::event::PermissionReply> {
+    ) -> GraphResult<Option<crate::runtime::event::PermissionReply>> {
         let permission = permission.into();
-        let reply = self.gate.apply_resume(&permission, command)?;
+        let Some(reply) = self.gate.apply_resume(&permission, command) else {
+            return Ok(None);
+        };
         self.emit(Event::PermissionReplied {
             permission,
             reply: reply.clone(),
-        });
-        Some(reply)
+        })?;
+        Ok(Some(reply))
     }
 
     pub async fn run_tool(&self, call: ToolCall) -> GraphResult<ToolOutput> {
@@ -292,16 +294,17 @@ impl SessionStateSink {
 }
 
 impl EventSink for SessionStateSink {
-    fn emit(&self, event: Event) {
+    fn emit(&self, event: Event) -> GraphResult<()> {
         let phase_events = {
             let mut state = self.session_state.lock().unwrap();
             let (_handled, phase_events) = state.apply_event_with_events(&event);
             phase_events
         };
-        self.inner.emit(event);
+        self.inner.emit(event)?;
         for phase_event in phase_events {
-            self.inner.emit(phase_event);
+            self.inner.emit(phase_event)?;
         }
+        Ok(())
     }
 }
 
@@ -330,8 +333,9 @@ mod tests {
     }
 
     impl EventSink for CaptureSink {
-        fn emit(&self, event: Event) {
+        fn emit(&self, event: Event) -> GraphResult<()> {
             self.events.lock().unwrap().push(event);
+            Ok(())
         }
     }
 
@@ -345,7 +349,7 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hello".to_string(),
-            });
+            })?;
             state.log.push("emitted".to_string());
             Ok(state)
         });
@@ -443,7 +447,7 @@ mod tests {
             Arc::clone(&registry),
             gate,
             |state: LoopState, ctx| async move {
-                ctx.reply_permission("tool:echo", crate::runtime::event::PermissionReply::Once);
+                ctx.reply_permission("tool:echo", crate::runtime::event::PermissionReply::Once)?;
                 ctx.run_tool(ToolCall::new("echo", "call-ok", serde_json::json!({})))
                     .await?;
                 Ok(state)
@@ -483,10 +487,10 @@ mod tests {
             move |state: LoopState, ctx| {
                 let resume = resume.clone();
                 async move {
-                    ctx.resume_permission("tool:echo", &resume);
-                ctx.run_tool(ToolCall::new("echo", "call-resume", serde_json::json!({})))
-                    .await?;
-                Ok(state)
+                    let _ = ctx.resume_permission("tool:echo", &resume)?;
+                    ctx.run_tool(ToolCall::new("echo", "call-resume", serde_json::json!({})))
+                        .await?;
+                    Ok(state)
                 }
             },
         );
@@ -510,17 +514,17 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hi".to_string(),
-            });
+            })?;
             ctx.emit(Event::ToolStart {
                 tool: "read".to_string(),
                 call_id: "c1".to_string(),
                 input: serde_json::json!({"path": "file.txt"}),
-            });
+            })?;
             ctx.emit(Event::ToolResult {
                 tool: "read".to_string(),
                 call_id: "c1".to_string(),
                 output: ToolOutput::text("ok"),
-            });
+            })?;
             Ok(state)
         });
 
@@ -549,7 +553,7 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hi".to_string(),
-            });
+            })?;
             Ok(state)
         });
 
@@ -580,7 +584,7 @@ mod tests {
                 tool: "read".to_string(),
                 call_id: "c1".to_string(),
                 input: serde_json::json!({"path": "file.txt"}),
-            });
+            })?;
             Ok(state)
         });
 
@@ -611,12 +615,12 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "he".to_string(),
-            });
+            })?;
             ctx.emit(Event::TextFinal {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 text: "llo".to_string(),
-            });
+            })?;
             Ok(state)
         });
 
@@ -655,8 +659,6 @@ mod tests {
         assert!(session_state.messages.is_empty());
     }
 }
-
-
 
 
 

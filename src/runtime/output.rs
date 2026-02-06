@@ -3,6 +3,7 @@
 use std::io::Write;
 use std::sync::Mutex;
 
+use crate::runtime::error::{GraphError, GraphResult};
 use crate::runtime::event::{Event, EventRecord, EventRecordSink, EventSink};
 
 /// JSON Lines output for Event stream (CLI-friendly).
@@ -23,11 +24,17 @@ impl<W: Write + Send> JsonLineEventSink<W> {
 }
 
 impl<W: Write + Send> EventSink for JsonLineEventSink<W> {
-    fn emit(&self, event: Event) {
-        if let Ok(json) = serde_json::to_string(&event) {
-            let mut writer = self.writer.lock().expect("poisoned writer");
-            let _ = writeln!(writer, "{json}");
-        }
+    fn emit(&self, event: Event) -> GraphResult<()> {
+        let json = serde_json::to_string(&event).map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:jsonl".to_string(),
+            message: format!("serialize event failed: {}", err),
+        })?;
+        let mut writer = self.writer.lock().expect("poisoned writer");
+        writeln!(writer, "{json}").map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:jsonl".to_string(),
+            message: format!("write event failed: {}", err),
+        })?;
+        Ok(())
     }
 }
 
@@ -55,11 +62,17 @@ impl<W: Write + Send> std::fmt::Debug for JsonLineEventRecordSink<W> {
 }
 
 impl<W: Write + Send> EventRecordSink for JsonLineEventRecordSink<W> {
-    fn emit_record(&self, record: EventRecord) {
-        if let Ok(json) = serde_json::to_string(&record) {
-            let mut writer = self.writer.lock().expect("poisoned writer");
-            let _ = writeln!(writer, "{json}");
-        }
+    fn emit_record(&self, record: EventRecord) -> GraphResult<()> {
+        let json = serde_json::to_string(&record).map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:jsonl_record".to_string(),
+            message: format!("serialize event record failed: {}", err),
+        })?;
+        let mut writer = self.writer.lock().expect("poisoned writer");
+        writeln!(writer, "{json}").map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:jsonl_record".to_string(),
+            message: format!("write event record failed: {}", err),
+        })?;
+        Ok(())
     }
 }
 
@@ -81,11 +94,17 @@ impl<W: Write + Send> SseEventSink<W> {
 }
 
 impl<W: Write + Send> EventSink for SseEventSink<W> {
-    fn emit(&self, event: Event) {
-        if let Ok(json) = serde_json::to_string(&event) {
-            let mut writer = self.writer.lock().expect("poisoned writer");
-            let _ = write!(writer, "data: {json}\n\n");
-        }
+    fn emit(&self, event: Event) -> GraphResult<()> {
+        let json = serde_json::to_string(&event).map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:sse".to_string(),
+            message: format!("serialize event failed: {}", err),
+        })?;
+        let mut writer = self.writer.lock().expect("poisoned writer");
+        write!(writer, "data: {json}\n\n").map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:sse".to_string(),
+            message: format!("write event failed: {}", err),
+        })?;
+        Ok(())
     }
 }
 
@@ -113,11 +132,17 @@ impl<W: Write + Send> std::fmt::Debug for SseEventRecordSink<W> {
 }
 
 impl<W: Write + Send> EventRecordSink for SseEventRecordSink<W> {
-    fn emit_record(&self, record: EventRecord) {
-        if let Ok(json) = serde_json::to_string(&record) {
-            let mut writer = self.writer.lock().expect("poisoned writer");
-            let _ = write!(writer, "data: {json}\n\n");
-        }
+    fn emit_record(&self, record: EventRecord) -> GraphResult<()> {
+        let json = serde_json::to_string(&record).map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:sse_record".to_string(),
+            message: format!("serialize event record failed: {}", err),
+        })?;
+        let mut writer = self.writer.lock().expect("poisoned writer");
+        write!(writer, "data: {json}\n\n").map_err(|err| GraphError::ExecutionError {
+            node: "event_sink:sse_record".to_string(),
+            message: format!("write event record failed: {}", err),
+        })?;
+        Ok(())
     }
 }
 
@@ -129,7 +154,9 @@ mod tests {
         SseEventRecordSink,
         SseEventSink,
     };
+    use crate::runtime::error::GraphError;
     use crate::runtime::event::{Event, EventMeta, EventRecord, EventRecordSink, EventSink};
+    use std::io;
 
     #[test]
     fn json_line_event_sink_writes_lines() {
@@ -138,7 +165,8 @@ mod tests {
             session_id: "s1".to_string(),
             message_id: "m1".to_string(),
             delta: "hi".to_string(),
-        });
+        })
+        .expect("emit");
 
         let output = String::from_utf8(sink.into_inner()).expect("utf8");
         assert!(output.contains("\"TextDelta\""));
@@ -158,7 +186,7 @@ mod tests {
                 seq: 1,
             },
         );
-        sink.emit_record(record);
+        sink.emit_record(record).expect("emit record");
 
         let output = String::from_utf8(sink.into_inner()).expect("utf8");
         assert!(output.contains("\"meta\""));
@@ -170,7 +198,8 @@ mod tests {
         let sink = SseEventSink::new(Vec::new());
         sink.emit(Event::StepStart {
             session_id: "s1".to_string(),
-        });
+        })
+        .expect("emit");
 
         let output = String::from_utf8(sink.into_inner()).expect("utf8");
         assert!(output.starts_with("data: "));
@@ -190,10 +219,40 @@ mod tests {
                 seq: 1,
             },
         );
-        sink.emit_record(record);
+        sink.emit_record(record).expect("emit record");
 
         let output = String::from_utf8(sink.into_inner()).expect("utf8");
         assert!(output.starts_with("data: "));
         assert!(output.ends_with("\n\n"));
+    }
+
+    struct FailingWriter;
+
+    impl io::Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::BrokenPipe, "sink write failed"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn json_line_event_sink_returns_error_on_write_failure() {
+        let sink = JsonLineEventSink::new(FailingWriter);
+        let err = sink
+            .emit(Event::StepStart {
+                session_id: "s1".to_string(),
+            })
+            .expect_err("emit should fail");
+
+        match err {
+            GraphError::ExecutionError { node, message } => {
+                assert_eq!(node, "event_sink:jsonl");
+                assert!(message.contains("write event failed"));
+            }
+            other => panic!("expected execution error, got {:?}", other),
+        }
     }
 }

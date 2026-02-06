@@ -165,16 +165,16 @@ impl ToolContext {
         self.attachment_store.clone()
     }
 
-    pub fn emit(&self, event: Event) {
-        self.sink.emit(event);
+    pub fn emit(&self, event: Event) -> GraphResult<()> {
+        self.sink.emit(event)
     }
 
-    pub fn emit_tool_update(&self, update: ToolUpdate) {
+    pub fn emit_tool_update(&self, update: ToolUpdate) -> GraphResult<()> {
         self.sink.emit(Event::ToolUpdate {
             tool: self.tool.clone(),
             call_id: self.call_id.clone(),
             update,
-        });
+        })
     }
 
     pub fn sink(&self) -> Arc<dyn EventSink> {
@@ -209,7 +209,7 @@ impl ToolContext {
                 let request = PermissionRequest::new(permission.clone(), vec![permission.clone()])
                     .with_metadata(metadata)
                     .with_always(vec![permission.clone()]);
-                self.emit(request.to_event());
+                self.emit(request.to_event())?;
                 Err(GraphError::Interrupted(vec![Interrupt::new(
                     request,
                     format!("permission:{}", permission),
@@ -398,17 +398,17 @@ impl ToolRunner {
             tool: tool.clone(),
             call_id: call_id.clone(),
             state: ToolState::Pending,
-        });
+        })?;
         sink.emit(Event::ToolStart {
             tool: tool.clone(),
             call_id: call_id.clone(),
             input,
-        });
+        })?;
         sink.emit(Event::ToolStatus {
             tool: tool.clone(),
             call_id: call_id.clone(),
             state: ToolState::Running,
-        });
+        })?;
 
         let context_clone = context.clone();
         let result = run(call, context).await;
@@ -422,19 +422,19 @@ impl ToolRunner {
                             tool: tool.clone(),
                             call_id: call_id.clone(),
                             state: ToolState::Completed,
-                        });
+                        })?;
                         for attachment in attachments {
                             sink.emit(Event::ToolAttachment {
                                 tool: tool.clone(),
                                 call_id: call_id.clone(),
                                 attachment,
-                            });
+                            })?;
                         }
                         sink.emit(Event::ToolResult {
                             tool: tool.clone(),
                             call_id: call_id.clone(),
                             output: output.clone(),
-                        });
+                        })?;
                         Ok(output)
                     }
                     Err(err) => {
@@ -442,12 +442,12 @@ impl ToolRunner {
                             tool: tool.clone(),
                             call_id: call_id.clone(),
                             state: ToolState::Error,
-                        });
+                        })?;
                         sink.emit(Event::ToolError {
                             tool: tool.clone(),
                             call_id: call_id.clone(),
                             error: err.to_string(),
-                        });
+                        })?;
                         Err(err)
                     }
                 }
@@ -457,12 +457,12 @@ impl ToolRunner {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
                     state: ToolState::Error,
-                });
+                })?;
                 sink.emit(Event::ToolError {
                     tool: tool.clone(),
                     call_id: call_id.clone(),
                     error: err.to_string(),
-                });
+                })?;
                 Err(err)
             }
         }
@@ -664,8 +664,9 @@ mod tests {
     }
 
     impl EventSink for CaptureSink {
-        fn emit(&self, event: Event) {
+        fn emit(&self, event: Event) -> crate::runtime::error::GraphResult<()> {
             self.events.lock().unwrap().push(event);
+            Ok(())
         }
     }
 

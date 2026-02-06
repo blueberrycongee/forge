@@ -1,6 +1,7 @@
 ﻿//! Trace data structures for runtime replay.
 
 use serde::{Deserialize, Serialize};
+use crate::runtime::error::GraphResult;
 
 /// A trace event capturing high-level execution activity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -53,50 +54,54 @@ impl TraceReplay {
     pub fn replay_to_sink(
         trace: &ExecutionTrace,
         sink: &dyn crate::runtime::event::EventSink,
-    ) {
+    ) -> GraphResult<()> {
         for event in &trace.events {
             let runtime_event = map_trace_event(event);
-            sink.emit(runtime_event);
+            sink.emit(runtime_event)?;
         }
+        Ok(())
     }
 
     pub fn replay_to_record_sink(
         trace: &ExecutionTrace,
         sink: &dyn crate::runtime::event::EventRecordSink,
-    ) {
+    ) -> GraphResult<()> {
         let sequencer = crate::runtime::event::EventSequencer::new();
         for event in &trace.events {
             let runtime_event = map_trace_event(event);
             let record = sequencer.record(runtime_event);
-            sink.emit_record(record);
+            sink.emit_record(record)?;
         }
+        Ok(())
     }
 
     pub fn replay_to_record_sink_with_start_seq(
         trace: &ExecutionTrace,
         sink: &dyn crate::runtime::event::EventRecordSink,
         start_seq: u64,
-    ) {
+    ) -> GraphResult<()> {
         let sequencer = crate::runtime::event::EventSequencer::with_start_seq(start_seq);
         for event in &trace.events {
             let runtime_event = map_trace_event(event);
             let record = sequencer.record(runtime_event);
-            sink.emit_record(record);
+            sink.emit_record(record)?;
         }
+        Ok(())
     }
 
     pub fn replay_to_record_sink_with_existing(
         trace: &ExecutionTrace,
         sink: &dyn crate::runtime::event::EventRecordSink,
         existing: &[crate::runtime::event::EventRecord],
-    ) {
+    ) -> GraphResult<()> {
         let start_seq = crate::runtime::event::max_record_seq(existing).unwrap_or(0);
         let sequencer = crate::runtime::event::EventSequencer::with_start_seq(start_seq);
         for event in &trace.events {
             let runtime_event = map_trace_event(event);
             let record = sequencer.record(runtime_event);
-            sink.emit_record(record);
+            sink.emit_record(record)?;
         }
+        Ok(())
     }
 
     pub fn replay_to_record_sink_with_record_log(
@@ -105,7 +110,8 @@ impl TraceReplay {
         path: impl AsRef<std::path::Path>,
     ) -> std::io::Result<()> {
         let existing = Self::read_audit_log_records(path)?;
-        Self::replay_to_record_sink_with_existing(trace, sink, &existing);
+        Self::replay_to_record_sink_with_existing(trace, sink, &existing)
+            .map_err(std::io::Error::other)?;
         Ok(())
     }
 
@@ -285,8 +291,9 @@ mod tests {
     }
 
     impl EventSink for CaptureSink {
-        fn emit(&self, event: Event) {
+        fn emit(&self, event: Event) -> crate::runtime::error::GraphResult<()> {
             self.events.lock().unwrap().push(event);
+            Ok(())
         }
     }
 
@@ -296,8 +303,9 @@ mod tests {
     }
 
     impl EventRecordSink for CaptureRecordSink {
-        fn emit_record(&self, record: EventRecord) {
+        fn emit_record(&self, record: EventRecord) -> crate::runtime::error::GraphResult<()> {
             self.records.lock().unwrap().push(record);
+            Ok(())
         }
     }
 
@@ -317,7 +325,7 @@ mod tests {
             events: Arc::clone(&events),
         };
 
-        TraceReplay::replay_to_sink(&trace, &sink);
+        TraceReplay::replay_to_sink(&trace, &sink).expect("replay");
 
         let events = events.lock().unwrap();
         assert!(events.iter().any(|event| matches!(event, Event::StepStart { .. })));
@@ -339,7 +347,7 @@ mod tests {
             records: Arc::clone(&records),
         };
 
-        TraceReplay::replay_to_record_sink(&trace, &sink);
+        TraceReplay::replay_to_record_sink(&trace, &sink).expect("replay");
 
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 2);
@@ -366,7 +374,7 @@ mod tests {
             records: Arc::clone(&records),
         };
 
-        TraceReplay::replay_to_record_sink_with_start_seq(&trace, &sink, 99);
+        TraceReplay::replay_to_record_sink_with_start_seq(&trace, &sink, 99).expect("replay");
 
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 1);
@@ -408,7 +416,8 @@ mod tests {
             records: Arc::clone(&records),
         };
 
-        TraceReplay::replay_to_record_sink_with_existing(&trace, &sink, &existing);
+        TraceReplay::replay_to_record_sink_with_existing(&trace, &sink, &existing)
+            .expect("replay");
 
         let captured = records.lock().unwrap();
         assert_eq!(captured.len(), 1);

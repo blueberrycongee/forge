@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::runtime::error::GraphResult;
 use crate::runtime::session_state::{RunStatus, SessionPhase};
 use crate::runtime::tool::{ToolAttachment, ToolMetadata, ToolOutput, ToolState};
 
@@ -480,19 +481,21 @@ mod tests {
 
 /// Event sink for streaming runtime events to UI/CLI/SSE/etc.
 pub trait EventSink: Send + Sync {
-    fn emit(&self, event: Event);
+    fn emit(&self, event: Event) -> GraphResult<()>;
 }
 
 /// A no-op event sink for tests or silent execution.
 pub struct NoopEventSink;
 
 impl EventSink for NoopEventSink {
-    fn emit(&self, _event: Event) {}
+    fn emit(&self, _event: Event) -> GraphResult<()> {
+        Ok(())
+    }
 }
 
 /// Event sink for protocol records (event_id/timestamp/seq).
 pub trait EventRecordSink: Send + Sync + Debug {
-    fn emit_record(&self, record: EventRecord);
+    fn emit_record(&self, record: EventRecord) -> GraphResult<()>;
 }
 
 /// A no-op event record sink for tests or silent execution.
@@ -500,5 +503,7 @@ pub trait EventRecordSink: Send + Sync + Debug {
 pub struct NoopEventRecordSink;
 
 impl EventRecordSink for NoopEventRecordSink {
-    fn emit_record(&self, _record: EventRecord) {}
+    fn emit_record(&self, _record: EventRecord) -> GraphResult<()> {
+        Ok(())
+    }
 }

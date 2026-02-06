@@ -19,8 +19,9 @@ struct CaptureSink {
 }
 
 impl EventSink for CaptureSink {
-    fn emit(&self, event: Event) {
+    fn emit(&self, event: Event) -> Result<(), GraphError> {
         self.events.lock().unwrap().push(event);
+        Ok(())
     }
 }
 
@@ -66,7 +67,8 @@ fn tool_context_emits_tool_update() {
     context.emit_tool_update(ToolUpdate::OutputDelta {
         delta: "hi".to_string(),
         stream: Some("stdout".to_string()),
-    });
+    })
+    .expect("emit update");
 
     let captured = events.lock().unwrap();
     assert!(captured.iter().any(|event| matches!(

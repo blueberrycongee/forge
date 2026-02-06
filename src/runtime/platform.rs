@@ -195,7 +195,7 @@ mod tests {
                 session_id: "s1".to_string(),
                 message_id: "m1".to_string(),
                 delta: "hello".to_string(),
-            });
+            })?;
             Ok(state)
         });
         graph.add_edge(START, "node");

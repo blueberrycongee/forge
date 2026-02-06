@@ -1,5 +1,6 @@
 ﻿use std::sync::{Arc, Mutex};
 
+use forge::runtime::error::GraphResult;
 use forge::runtime::event::{Event, EventSink};
 
 /// Capture runtime events for test assertions.
@@ -38,8 +39,9 @@ struct CollectorSink {
 }
 
 impl EventSink for CollectorSink {
-    fn emit(&self, event: Event) {
+    fn emit(&self, event: Event) -> GraphResult<()> {
         self.events.lock().unwrap().push(event);
+        Ok(())
     }
 }
 

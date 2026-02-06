@@ -33,3 +33,6 @@ Thumbs.db
 *.prof*
 debug/
 release/
+
+# Third-party references
+/thirdparty/
