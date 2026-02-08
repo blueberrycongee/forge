@@ -117,8 +117,8 @@ Without these entry points, files under `tests/integration`, `tests/unit`, and `
 
 ## Phase 3 (8+ weeks): Release Hardening
 
-1. Publish compatibility statement for 1.0 contract surfaces.
-2. Add migration notes and deprecation policy.
+1. Publish compatibility statement for 1.0 contract surfaces. (Done: `docs/api-compatibility-policy.md`)
+2. Add migration notes and deprecation policy. (Done: `docs/upgrading.md`, `docs/deprecation-policy.md`)
 3. Cut release candidates with frozen conformance reports.
 
 ## 1.0 Definition of Done
@@ -126,4 +126,4 @@ Without these entry points, files under `tests/integration`, `tests/unit`, and `
 1. All P0 conformance tests are implemented and green in CI.
 2. Serialization compatibility fixtures are stable across two consecutive release candidates.
 3. No undocumented breaking change in the 1.0 contract scope.
-4. Public upgrade and compatibility policy is documented.
+4. Public upgrade and compatibility policy is documented. (Done)
