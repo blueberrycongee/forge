@@ -192,7 +192,8 @@ Forge 通过 `EventSink` / `EventRecordSink` 输出结构化事件。
 
 Forge 目前处于 pre-1.0 的活跃开发阶段。
 
-- API 可能在不同 commit 间发生变化。
+- 公开 API 与兼容性治理规则已文档化，并在 PR 审查中执行。
+- pre-1.0 阶段仍可能有破坏性变更，但必须附带迁移说明。
 - 发布节奏按里程碑推进，不按固定时间频率。
 - 生产使用建议固定 commit，并做兼容性回归测试。
 
@@ -209,6 +210,11 @@ cargo clippy
 - 进度记录：[PROGRESS.md](PROGRESS.md)
 - 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
 - 安全策略：[SECURITY.md](SECURITY.md)
+- API 兼容策略：[docs/api-compatibility-policy.md](docs/api-compatibility-policy.md)
+- 弃用策略：[docs/deprecation-policy.md](docs/deprecation-policy.md)
+- 升级指南：[docs/upgrading.md](docs/upgrading.md)
+- 变更日志：[CHANGELOG.md](CHANGELOG.md)
+- 1.0 合同与一致性矩阵：[docs/forge-1.0-contracts-and-conformance.md](docs/forge-1.0-contracts-and-conformance.md)
 
 ## 贡献
 

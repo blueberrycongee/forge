@@ -194,7 +194,8 @@ Runnable examples are in `/examples`:
 
 Forge is in active pre-1.0 development.
 
-- APIs may change between commits.
+- Public API and compatibility governance are documented and enforced in PR review.
+- Pre-1.0 changes may still be breaking, but must include migration notes.
 - Release cadence is milestone-driven instead of time-driven.
 - For production usage, pin a specific commit and run your own compatibility tests.
 
@@ -211,6 +212,11 @@ cargo clippy
 - Progress log: [PROGRESS.md](PROGRESS.md)
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security policy: [SECURITY.md](SECURITY.md)
+- API compatibility policy: [docs/api-compatibility-policy.md](docs/api-compatibility-policy.md)
+- Deprecation policy: [docs/deprecation-policy.md](docs/deprecation-policy.md)
+- Upgrade guide: [docs/upgrading.md](docs/upgrading.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- 1.0 contracts and conformance matrix: [docs/forge-1.0-contracts-and-conformance.md](docs/forge-1.0-contracts-and-conformance.md)
 
 ## Contributing
 
