@@ -199,6 +199,8 @@ Forge 目前处于 pre-1.0 的活跃开发阶段。
 
 ## 开发
 
+最低支持 Rust 版本（MSRV）：`1.75`。
+
 ```bash
 cargo test
 cargo clippy

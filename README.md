@@ -201,6 +201,8 @@ Forge is in active pre-1.0 development.
 
 ## Development
 
+MSRV: Rust `1.75`.
+
 ```bash
 cargo test
 cargo clippy
